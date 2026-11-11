@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: BeatBax core (language / Desktop / CLI)
+    url: https://github.com/kadraman/beatbax/issues
+    about: Language syntax, Desktop IDE, and CLI issues belong in the BeatBax repository.
+  - name: Spec process
+    url: https://github.com/kadraman/beatbax-fm1/blob/main/specs/README.md
+    about: How feature, spec, and bug intake maps to specs/features/.
