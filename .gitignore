@@ -1,0 +1,42 @@
+# Build outputs
+build/
+dist/
+*.bin
+*.elf
+*.fwsc
+*.fm1app
+*.o
+*.a
+*.map
+*.dis
+
+# Toolchains / deps
+.deps/
+firmware/third_party/felucca/
+**/node_modules/
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+*.user
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local secrets / device dumps
+local/
+*.dump
+flash-backup*
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Test / coverage
+coverage/
+*.lcov
