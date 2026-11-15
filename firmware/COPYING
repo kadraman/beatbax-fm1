@@ -1,0 +1,8 @@
+BeatBax FM-1 firmware application sources under app/ are licensed under the
+GNU General Public License version 3 or (at your option) any later version.
+
+A full copy of the GPL-3.0 text is in COPYING.GPL-3.0 in this directory.
+If not, see <https://www.gnu.org/licenses/>.
+
+The felucca-bsp HAL under third_party/felucca-bsp/ remains MPL-2.0 (upstream).
+See that tree's LICENSE / LICENSING.md and the repository root LICENSING.md.

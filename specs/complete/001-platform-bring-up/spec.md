@@ -2,10 +2,10 @@
 title: "Platform bring-up"
 id: 1
 slug: "platform-bring-up"
-status: draft
+status: complete
 authors: ["kadraman"]
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-15
 issue: "https://github.com/kadraman/beatbax-fm1/issues/1"
 area: firmware
 ---
@@ -34,7 +34,7 @@ Without a proven board bring-up, later Game Boy player and composer work has no 
 2. **Given** the bring-up firmware installed, **When** the device powers on, **Then** a single diagnostic screen paints and remains responsive.
 3. **Given** the diagnostic is running, **When** each Felucca-mapped control is actuated, **Then** the screen reflects that control (or a complete control list updates).
 4. **Given** the diagnostic is running, **When** the user triggers the documented tone action, **Then** a test tone plays within the [audio budget](../../global/audio.md).
-5. **Given** the device is connected by USB, **When** the host enumerates devices, **Then** the bring-up firmware is visible as documented (MIDI and/or CDC as the plan chooses, consistently).
+5. **Given** the device is connected by USB, **When** the host enumerates devices, **Then** the bring-up firmware is visible as a USB MIDI device named **BeatBax FM-1** (MIDI only; no CDC in this phase).
 
 ### User Story 2 — Recovery and return to stock (Priority: P1)
 
@@ -85,10 +85,11 @@ Without a proven board bring-up, later Game Boy player and composer work has no 
 - Felucca remains publicly available at the pinned commit.
 - Maintainer has (or will obtain) an FM-1 and JieLi toolchain for the hardware checklist.
 
-## Open questions
+## Decisions (locked)
 
-- Exact USB identity (MIDI-only vs MIDI+CDC) for bring-up — decide in `plan.md`.
-- Whether a host simulator stub ships in 001 or waits until after first hardware flash.
+- USB is **MIDI only** for bring-up. Product string: `BeatBax FM-1`. Manufacturer string: `BeatBax`. CDC is deferred until a later phase needs a serial console.
+- No host simulator stub in 001. Acceptance is the hardware checklist after the first real flash.
+- HAL pin: Felucca commit recorded in `firmware/FELUCCA_PIN`; the linked tree is that commit’s `firmware/bsp` (felucca-bsp) submodule.
 
 ## References
 

@@ -13,7 +13,7 @@ Product direction for turning the M-VAVE FM-1 into a BeatBax-compatible graphica
 
 | ID | Feature | Issue | Goal |
 |----|---------|-------|------|
-| [001](specs/features/001-platform-bring-up/) | Platform bring-up | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | Pin Felucca; screen, controls, test tone, USB; recovery docs |
+| [001](specs/complete/001-platform-bring-up/) | Platform bring-up | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | Pin Felucca; screen, controls, test tone, USB; recovery docs |
 | [002](specs/features/002-bax-round-trip/) | `.bax` round-trip | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) | Host song model for Game Boy subset; CLI verify fixtures |
 | [003](specs/features/003-gameboy-renderer/) | Game Boy renderer | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | Fixed-point four-voice render; compare to BeatBax CLI |
 | [004](specs/features/004-device-player/) | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | Same renderer on FM-1; play fixture from flash |

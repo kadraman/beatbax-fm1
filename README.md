@@ -4,7 +4,7 @@
 
 Songs stay as `.bax` text. Compose on the FM-1’s screens and knobs, then open the same file in BeatBax Desktop or play it with the BeatBax CLI. The first chip is Game Boy (DMG-01). Later chips follow BeatBax’s plugin order.
 
-This repository currently ships **specifications and process** only. Firmware and host tooling land behind the feature folders under [`specs/features/`](specs/features/).
+Feature **001** (platform bring-up) adds the first firmware tree under [`firmware/`](firmware/). Host song tooling lands in later features. Specs remain authoritative under [`specs/`](specs/).
 
 ## Why a separate repo
 
@@ -33,6 +33,8 @@ Related community firmwares (patterns only, not song formats): [Sidou](https://g
 
 ```
 beatbax-fm1/
+├── firmware/         # Device application + pinned Felucca BSP (GPL when linked)
+├── docs/hardware/    # Bring-up, recovery, hardware checklists
 ├── specs/            # Spec-driven development (constitution, global, features)
 ├── .github/          # Issue and pull request templates
 ├── AGENTS.md         # Instructions for coding agents
@@ -41,14 +43,14 @@ beatbax-fm1/
 └── LICENSING.md
 ```
 
-Planned implementation layout (after feature 001):
+Planned later:
 
 ```
-firmware/             # Device application (GPL when linked with Felucca)
 host/                 # Portable song model and tools (Apache-2.0)
-docs/                 # User and developer notes
 songs/                # Fixture .bax songs
 ```
+
+Build and flash: [`firmware/README.md`](firmware/README.md). Recovery: [`docs/hardware/recovery.md`](docs/hardware/recovery.md).
 
 ## Spec-driven development
 
@@ -65,7 +67,7 @@ Start with [specs/README.md](specs/README.md) and [specs/constitution.md](specs/
 
 | ID | Feature | Issue | Status |
 |----|---------|-------|--------|
-| 001 | Platform bring-up (Felucca, screen, controls, tone, USB) | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | draft |
+| 001 | Platform bring-up (Felucca, screen, controls, tone, USB) | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | in-progress |
 | 002 | `.bax` round-trip on the host | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) | draft |
 | 003 | Game Boy renderer on the host | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | draft |
 | 004 | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | draft |

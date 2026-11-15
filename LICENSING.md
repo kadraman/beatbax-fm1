@@ -12,14 +12,17 @@ BeatBax FM-1 uses a split license so host tooling can stay Apache-2.0 while firm
 
 Root [LICENSE](LICENSE) is Apache-2.0 and applies to project-authored material that is not otherwise marked. Firmware sources that depend on Felucca will carry an SPDX GPL-3.0-or-later notice and a copy of the GPL when those files are added.
 
-## Third-party dependencies (planned)
+## Third-party dependencies
 
 | Component | Role | License (upstream) | How we use it |
 |-----------|------|--------------------|---------------|
-| [Felucca](https://github.com/hugelton/Felucca) | FM-1 panel, LCD, USB, audio HAL | GPL (upstream terms) | Pin a commit; link only from firmware |
+| [Felucca](https://github.com/hugelton/Felucca) | Pin authority for the FM-1 HAL commit | GPL-3.0-only (upstream) | Exact SHA in `firmware/FELUCCA_PIN`; we do **not** link Felucca’s synth engines |
+| [felucca-bsp](https://github.com/hugelton/felucca-bsp) | FM-1 panel, LCD, USB, audio HAL | MPL-2.0 | Git submodule at `firmware/third_party/felucca-bsp` (SHA Felucca pins as `firmware/bsp`); linked only from firmware |
 | BeatBax CLI / language | Compatibility oracle for `.bax` | MIT (BeatBax) | External tool for verify/play; do not vendor the whole monorepo into firmware |
 | Sidou / Chipbox / OPN-1 / fm1-nes / fm1_open | Reference patterns | Various (often GPL) | **Patterns and docs only** — do not copy their synth or song-format sources into this tree |
 | Official FM-1 binary SDK (`fm1_open`) | Stock workstation | Binary SDK terms | **Not** used as the BeatBax synth engine |
+
+Firmware application sources under `firmware/app/` carry SPDX `GPL-3.0-or-later`. A combined image that includes felucca-bsp is distributed as a GPL work with corresponding source.
 
 ## Rules for contributors and agents
 
