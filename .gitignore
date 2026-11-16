@@ -7,8 +7,10 @@ dist/
 *.fm1app
 *.o
 *.a
+*.exe
 *.map
 *.dis
+*.canon*.bax
 
 # Toolchains / deps
 .deps/

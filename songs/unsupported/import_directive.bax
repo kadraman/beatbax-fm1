@@ -1,0 +1,4 @@
+# Negative fixture: unsupported import directive
+chip gameboy
+import "local:lib/instruments.ins"
+bpm 120

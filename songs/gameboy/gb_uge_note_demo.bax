@@ -1,0 +1,20 @@
+# Game Boy hUGETracker noise-note parity reference
+
+chip gameboy
+bpm 128
+song name "Game Boy UGE Note Demo"
+song artist "The BeatBax Team"
+song description "Parity reference: uge_note drives hUGETracker rows and BeatBax noise playback clock."
+song tags "gameboy,instrument,demo,uge,noise,parity"
+
+inst kick       type=noise gb:width=7  env={"level":14,"direction":"down","period":1,"format":"gb"} length=16 uge_note=C-6
+inst snare      type=noise gb:width=15 env={"level":10,"direction":"down","period":2,"format":"gb"} length=16 uge_note=C-7
+inst open_hat   type=noise gb:width=15 env={"level":4,"direction":"down","period":3,"format":"gb"} length=32 uge_note=D-8
+inst closed_hat type=noise gb:width=15 env={"level":4,"direction":"down","period":1,"format":"gb"} length=8  uge_note=C-8
+
+pat drums_a = kick closed_hat closed_hat open_hat kick closed_hat closed_hat open_hat
+pat drums_b = kick closed_hat snare closed_hat kick kick closed_hat snare
+
+channel 4 => inst kick seq drums_a drums_b drums_a drums_b
+
+play

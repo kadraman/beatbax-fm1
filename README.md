@@ -34,8 +34,11 @@ Related community firmwares (patterns only, not song formats): [Sidou](https://g
 ```
 beatbax-fm1/
 ├── firmware/         # Device application + pinned Felucca BSP (GPL when linked)
-├── docs/hardware/    # Bring-up, recovery, hardware checklists
+├── host/             # Portable song model and tools (Apache-2.0, see host/song/README.md)
+├── songs/            # Fixture .bax songs (gameboy, unsupported)
+├── docs/             # Hardware bring-up and song model specifications
 ├── specs/            # Spec-driven development (constitution, global, features)
+├── tools/            # Host verification scripts (verify-bax.py)
 ├── .github/          # Issue and pull request templates
 ├── AGENTS.md         # Instructions for coding agents
 ├── CONTRIBUTING.md
@@ -43,13 +46,7 @@ beatbax-fm1/
 └── LICENSING.md
 ```
 
-Planned later:
-
-```
-host/                 # Portable song model and tools (Apache-2.0)
-songs/                # Fixture .bax songs
-```
-
+Song model reference: [`docs/song-model.md`](docs/song-model.md).  
 Build and flash: [`firmware/README.md`](firmware/README.md). Recovery: [`docs/hardware/recovery.md`](docs/hardware/recovery.md).
 
 ## Spec-driven development
@@ -67,8 +64,8 @@ Start with [specs/README.md](specs/README.md) and [specs/constitution.md](specs/
 
 | ID | Feature | Issue | Status |
 |----|---------|-------|--------|
-| 001 | Platform bring-up (Felucca, screen, controls, tone, USB) | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | in-progress |
-| 002 | `.bax` round-trip on the host | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) | draft |
+| 001 | Platform bring-up (Felucca, screen, controls, tone, USB) | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | complete |
+| 002 | `.bax` round-trip on the host | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) | complete |
 | 003 | Game Boy renderer on the host | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | draft |
 | 004 | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | draft |
 | 005 | Graphical composer screens | [#5](https://github.com/kadraman/beatbax-fm1/issues/5) | draft |

@@ -1,0 +1,4 @@
+# Negative fixture: invalid channel number out of range (1..4)
+chip gameboy
+bpm 120
+channel 5 => seq dummy

@@ -2,7 +2,7 @@
 title: ".bax round-trip on the host"
 id: 2
 slug: "bax-round-trip"
-status: draft
+status: complete
 authors: ["kadraman"]
 created: 2026-11-11
 updated: 2026-11-11
