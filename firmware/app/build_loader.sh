@@ -18,12 +18,14 @@ if [ ! -f "$LDR/loader.c" ]; then
 fi
 
 mkdir -p "$OUT"
-CC="$TC/pi32v2/bin/clang -target pi32v2"
 CFLAGS="-Os -ffunction-sections -fno-builtin -Wall -Wno-unused-function"
-INCLUDES="-I$BSP/chip -I$BSP/boards/fm1"
 
-$CC -c "$LDR/crt0_ldr.S" -o "$OUT/crt0_ldr.o"
-$CC $CFLAGS $INCLUDES -c "$LDR/loader.c" -o "$OUT/loader.o"
+cc_pi32() {
+    "$TC/pi32v2/bin/clang" -target pi32v2 "$@"
+}
+
+cc_pi32 -c "$LDR/crt0_ldr.S" -o "$OUT/crt0_ldr.o"
+cc_pi32 $CFLAGS -I"$BSP/chip" -I"$BSP/boards/fm1" -c "$LDR/loader.c" -o "$OUT/loader.o"
 "$TC/pi32v2/bin/ld" --gc-sections -e _start -T "$LDR/loader.ld" \
     "$OUT/crt0_ldr.o" "$OUT/loader.o" -o "$OUT/loader.elf"
 "$TC/common/bin/objcopy" -O binary -j .text "$OUT/loader.elf" "$OUT/loader.bin"

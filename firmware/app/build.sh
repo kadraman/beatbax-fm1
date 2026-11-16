@@ -25,14 +25,16 @@ mkdir -p "$OUT"
 rm -f "$OUT"/*.* "$OUT"/crt0.o "$OUT"/vec.o "$OUT"/isr.o "$OUT"/bringup.o \
     "$OUT"/loader.o "$OUT"/crt0_ldr.o 2>/dev/null || true
 find "$OUT" -maxdepth 1 -type f ! -path "$OUT/known-good/*" -delete 2>/dev/null || true
-CC="$TC/pi32v2/bin/clang -target pi32v2"
 CFLAGS="-Os -ffunction-sections -fno-builtin -Wall -Wno-unused-function"
-INCLUDES="-I$BSP/chip -I$BSP/boards/fm1"
 
-$CC -c "$BSP/chip/crt0.S" -o "$OUT/crt0.o"
-$CC -c "$BSP/chip/fm1_vec.S" -o "$OUT/vec.o"
-$CC -c "$BSP/chip/fm1_isr.S" -o "$OUT/isr.o"
-$CC $CFLAGS $INCLUDES -c "$HERE/bringup.c" -o "$OUT/bringup.o"
+cc_pi32() {
+    "$TC/pi32v2/bin/clang" -target pi32v2 "$@"
+}
+
+cc_pi32 -c "$BSP/chip/crt0.S" -o "$OUT/crt0.o"
+cc_pi32 -c "$BSP/chip/fm1_vec.S" -o "$OUT/vec.o"
+cc_pi32 -c "$BSP/chip/fm1_isr.S" -o "$OUT/isr.o"
+cc_pi32 $CFLAGS -I"$BSP/chip" -I"$BSP/boards/fm1" -c "$HERE/bringup.c" -o "$OUT/bringup.o"
 "$TC/pi32v2/bin/ld" -T "$HERE/app.ld" "$OUT/crt0.o" "$OUT/vec.o" "$OUT/isr.o" "$OUT/bringup.o" -o "$OUT/$NAME.elf"
 "$TC/common/bin/objcopy" -O binary -j .text "$OUT/$NAME.elf" "$OUT/text.bin"
 "$TC/common/bin/objcopy" -O binary -j .data "$OUT/$NAME.elf" "$OUT/data.bin"

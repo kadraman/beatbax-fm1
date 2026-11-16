@@ -16,7 +16,8 @@ if ($bash) {
 $wsl = Get-Command wsl -ErrorAction SilentlyContinue
 if ($wsl) {
     $unix = (wsl wslpath -a $here).Trim()
-    wsl bash -lc "cd '$unix' && export JIELI_TOOLCHAIN=`$(wslpath -a '$env:JIELI_TOOLCHAIN') && sh ./build.sh"
+    $tcUnix = (wsl wslpath -a $env:JIELI_TOOLCHAIN).Trim()
+    wsl bash -lc "cd '$unix' && export JIELI_TOOLCHAIN='$tcUnix' && sh ./build.sh"
     exit $LASTEXITCODE
 }
 

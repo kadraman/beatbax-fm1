@@ -17,7 +17,7 @@
 | Install path | **M-Flasher** (with m-bootloader installed alongside for recovery) |
 | Recovery | Hold **REC** on reboot → bootloader; PLAY-hold → `WL82 UBOOT1.00` |
 
-**Blocked on:** nothing — the unit is recovered and boots BeatBax bring-up. Remaining: record the checklist rows. The two-boot → UBOOT guard is **disabled** (it fires falsely on this unit); recovery is via REC-hold or PLAY-hold.
+**Blocked on:** nothing for the known-good path — record checklist rows after confirming the restored image. Two-boot → auto-UBOOT stays **disabled** (fires falsely on this unit). Recovery: REC-hold → m-bootloader; PLAY-hold (after screen init) → `WL82 UBOOT1.00`. Do not re-enable auto-UBOOT until the false trigger is understood.
 
 ## What worked
 
@@ -194,9 +194,12 @@ The boot canary (`firmware/app/canary.c`) isolated **two** faults:
 **Result: the bring-up image now boots** — `BEAT 001` diagnostic, controls update the
 screen, USB enumerates. The title glyph for `T` was also corrected (it was drawn as `H`).
 
-**Note:** the two-boot → UBOOT guard is **disabled** in `bringup.c` — it fires falsely on
-this unit even with a clean counter (the device boots fine with it off). Recovery is via
-REC-hold (m-bootloader) or PLAY-hold. Investigate the guard before re-enabling.
+**Note (2026-11-16):** an automated PR review asked to restore `fm1_enter_uboot()` at
+`failed >= 2` and to scan PLAY before `lcd_init()`. Both were tried; the unit returned
+to **black screen / no UI** (ROM UBOOT). Reverted to the known-working boot path:
+screen first, then PLAY-hold; auto-UBOOT remains a no-op with counters cleared only.
+Root cause of the false two-boot trip is still open — do not “fix” it again without
+hardware isolation.
 
 ## Quick reference — PnP
 

@@ -1,0 +1,25 @@
+feat(001-platform-bring-up): ship FM-1 platform bring-up
+
+Pin Felucca as the FM-1 HAL and ship the feature-001 diagnostic image:
+BEAT 001 screen, full control scan, fixed-point test tone, and USB MIDI
+(BeatBax FM-1).
+
+Boot fixes found during hardware bring-up:
+- attach the ALNK0 IRQ before fm1_guard_lock_top(): attaching after it
+  wrote the vector table into the write-guarded region -> write-guard
+  exception -> ROM UBOOT (the black-screen failure).
+- call the .ram_text tone callback via FL_FAR() and mark it RAMFN
+  (noinline): a direct XIP->SRAM call exceeds the pi32 23-bit call range
+  (R_PI32V2_LONG_JUMP_23M2); this also keeps hot audio in SRAM.
+
+Add a boot canary (canary.c) and a boot-stage indicator for bisecting boot
+faults, plus a PLAY-hold rescue. The two-boot->UBOOT guard is left disabled
+(it fires falsely on this unit; tracked in #9).
+
+Recovery is now M-Flasher + m-bootloader (hold REC on reboot); the Flipper
+USB-key route is demoted to a last-resort fallback.
+
+Hardware checklist passed (docs/hardware/checklist-001.md); spec moved to
+specs/complete/001-platform-bring-up/.
+
+Closes #1
