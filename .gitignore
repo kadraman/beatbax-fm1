@@ -12,7 +12,6 @@ dist/
 
 # Toolchains / deps
 .deps/
-firmware/third_party/felucca/
 **/node_modules/
 
 # IDE / OS

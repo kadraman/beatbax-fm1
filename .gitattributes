@@ -1,0 +1,4 @@
+# Shell scripts must stay LF so WSL/dash can run them from /mnt/c
+*.sh text eol=lf
+*.bash text eol=lf
+**/build.sh text eol=lf

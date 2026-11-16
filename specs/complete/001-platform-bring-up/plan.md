@@ -1,10 +1,10 @@
 # Implementation Plan: Platform bring-up
 
-**Spec**: [spec.md](spec.md) | **Date**: 2026-11-11 | **Branch**: `feat/001-platform-bring-up`
+**Spec**: [spec.md](spec.md) | **Date**: 2026-11-12 | **Branch**: `feat/001-platform-bring-up`
 
 ## Summary
 
-Vendor or submodule a pinned Felucca tree, add a minimal BeatBax FM-1 app that draws a diagnostic screen, polls controls, plays a fixed-point test tone in the audio callback, and exposes USB. Document Windows toolchain setup, install, OCT- rescue, and return to stock.
+Pin Felucca via `firmware/FELUCCA_PIN` and submodule the matching **felucca-bsp** HAL (Felucca’s `firmware/bsp` at that pin). Add a minimal BeatBax FM-1 diagnostic app that draws one screen, polls controls, plays a fixed-point test tone in the audio callback, and enumerates as USB MIDI **BeatBax FM-1**. Document toolchain setup, install, OCT- rescue, and return to stock.
 
 ## Technical context
 
@@ -33,14 +33,25 @@ GATE: must pass before implementation. Re-check after design changes.
 
 ```
 firmware/
-  README.md                 # build, flash, pin
-  third_party/felucca/      # or submodule + pin file
-  app/                      # BeatBax FM-1 bring-up app
+  README.md                      # build, flash, pin, USB identity
+  FELUCCA_PIN                    # Felucca commit + derived BSP SHA
+  third_party/felucca-bsp/       # git submodule (HAL)
+  app/                           # BeatBax FM-1 bring-up app (GPL-3.0-or-later)
 docs/hardware/
   bring-up.md
   recovery.md
   checklist-001.md
 ```
+
+## Locked decisions
+
+| Topic | Choice |
+|-------|--------|
+| Felucca pin | Exact SHA in `firmware/FELUCCA_PIN`. Linked HAL is that commit’s `firmware/bsp` → [felucca-bsp](https://github.com/hugelton/felucca-bsp) submodule (not Felucca’s synth engines). |
+| Submodule path | `firmware/third_party/felucca-bsp` |
+| USB | MIDI only (`FELUCCA_CDC=0`). Product: `BeatBax FM-1`. Manufacturer: `BeatBax`. |
+| Host simulator | Out of scope for 001 |
+| Tone gate | Matrix button **PLAY** (id **12**, Felucca `PANEL_DEFAULT`) toggles a fixed-point square tone |
 
 ## Implementation
 
@@ -50,11 +61,11 @@ N/A
 
 ### Firmware / platform
 
-- Record Felucca commit in `firmware/FELUCCA_PIN` (or equivalent).
-- Wire app entry to Felucca platform init, LCD, panel scan, audio, USB.
-- Diagnostic screen: title, firmware version, control activity log or grid.
-- Test tone: fixed-point square or sine table; gated by a documented button (e.g. highest key or PLAY).
-- USB: prefer the Felucca MIDI path already proven by community firmwares; add CDC only if needed for logs.
+- Record Felucca + BSP SHAs in `firmware/FELUCCA_PIN`.
+- Wire `firmware/app/` to BSP init (LCD, panel scan, audio, USB MIDI).
+- Diagnostic screen: title, version, control activity grid for every Felucca-mapped control.
+- Test tone: fixed-point square in the audio callback; PLAY toggles on/off. No flash erase, draw, or USB wait in the callback.
+- USB: BSP MIDI path only.
 
 ### UI screens
 
@@ -62,11 +73,11 @@ N/A
 
 ### Audio / renderer
 
-- Minimal callback fill; measure ticks once on hardware.
+- Minimal callback fill; measure ticks once on hardware (checklist).
 
 ### Transfer / storage
 
-- Install via Felucca/`fm1_install.py`-style flow; document only. No song store.
+- Install via BSP / Felucca `fm1_install.py`-style flow; document only. No song store.
 
 ### Documentation updates
 
@@ -92,5 +103,4 @@ N/A
 
 ## Open implementation questions
 
-- Submodule vs vendored snapshot of Felucca.
-- USB MIDI device name string for BeatBax FM-1.
+_None — decisions locked above._

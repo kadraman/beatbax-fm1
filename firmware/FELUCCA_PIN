@@ -1,0 +1,25 @@
+# BeatBax FM-1 — Felucca HAL pin (feature 001)
+#
+# Authority: specs/complete/001-platform-bring-up/ and specs/global/hardware.md
+#
+# We pin a Felucca commit, then link the HAL that commit vendors as its
+# firmware/bsp git submodule (felucca-bsp). We do not link Felucca's synth
+# engines or UI — only the board/chip HAL.
+
+FELUCCA_REPO=https://github.com/hugelton/Felucca
+FELUCCA_COMMIT=a4f007c9211ea5b37298c01ff6d73430fe2cb96a
+FELUCCA_COMMIT_DATE=2026-11-04
+FELUCCA_COMMIT_SUBJECT=docs: keep README focused on supported FM-1 releases
+
+# Derived from Felucca@$FELUCCA_COMMIT → firmware/bsp submodule
+FELUCCA_BSP_REPO=https://github.com/hugelton/felucca-bsp
+FELUCCA_BSP_COMMIT=5942e68b89ab9ccd23f2c541d712ca38fe635f11
+FELUCCA_BSP_PATH=firmware/third_party/felucca-bsp
+
+# Fetch / refresh the pinned BSP tree:
+#   git submodule update --init firmware/third_party/felucca-bsp
+#   git -C firmware/third_party/felucca-bsp checkout $FELUCCA_BSP_COMMIT
+#
+# Verify the pin still matches Felucca's bsp submodule:
+#   git ls-remote https://github.com/hugelton/Felucca.git $FELUCCA_COMMIT
+#   # then: git ls-tree $FELUCCA_COMMIT firmware/bsp
