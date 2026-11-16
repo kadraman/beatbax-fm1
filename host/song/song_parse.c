@@ -21,6 +21,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+static char *bax_strdup(const char *s) {
+    if (!s) return NULL;
+    size_t len = strlen(s) + 1;
+    char *copy = (char *)malloc(len);
+    if (copy) {
+        memcpy(copy, s, len);
+    }
+    return copy;
+}
+
 void bax_error_init(bax_error_t *err) {
     if (!err) return;
     err->code = BAX_OK;
@@ -862,7 +872,7 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                             ch->seq_names = narr;
                             ch->seq_capacity = new_cap;
                         }
-                        ch->seq_names[ch->seq_count++] = strdup(sname);
+                        ch->seq_names[ch->seq_count++] = bax_strdup(sname);
                     }
                 } else if (strncmp(word, "lock=", 5) == 0) {
                     ch->lock_scale = true;
