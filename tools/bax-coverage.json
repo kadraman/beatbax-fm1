@@ -1,0 +1,33 @@
+{
+  "songs/features/advanced_modifiers_demo.bax": { "expect": "ok" },
+  "songs/features/local_import_example.bax": { "expect": "refuse", "reason": "unsupported directive: import" },
+  "songs/features/metadata_example.bax": { "expect": "refuse", "reason": "unsupported top-level directive" },
+  "songs/features/remote_import_example.bax": { "expect": "refuse", "reason": "unsupported directive: import" },
+  "songs/features/scale_awareness_demo.bax": { "expect": "ok" },
+  "songs/features/sequence_demo.bax": { "expect": "ok" },
+  "songs/features/simple_modifiers_demo.bax": { "expect": "ok" },
+  "songs/features/song_composition_advanced_demo.bax": { "expect": "ok" },
+  "songs/features/song_composition_demo.bax": { "expect": "ok" },
+  "songs/features/sustain_demo.bax": { "expect": "ok" },
+
+  "songs/gameboy/effects/gb_arpeggio_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_echo_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_effects_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_notecut_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_panning_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_pitchbend_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_portamento_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_retrigger_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_sweep_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_tremolo_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_vibrato_demo.bax": { "expect": "ok" },
+  "songs/gameboy/effects/gb_volume_slide_demo.bax": { "expect": "ok" },
+
+  "songs/gameboy/instruments/gb_dcm_demo.bax": { "expect": "ok" },
+  "songs/gameboy/instruments/gb_instrument_demo.bax": { "expect": "ok" },
+  "songs/gameboy/instruments/gb_percussion_demo.bax": { "expect": "ok" },
+  "songs/gameboy/instruments/gb_subpattern_macro_demo.bax": { "expect": "ok" },
+  "songs/gameboy/instruments/gb_sweep_demo.bax": { "expect": "ok" },
+  "songs/gameboy/instruments/gb_uge_note_demo.bax": { "expect": "ok" },
+  "songs/gameboy/instruments/gb_wave_scan_demo.bax": { "expect": "ok" }
+}

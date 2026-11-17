@@ -137,6 +137,61 @@ static bool read_ident(parser_ctx_t *ctx, char *buf, size_t buf_size) {
     return idx > 0;
 }
 
+/* Read a raw whitespace/comma/newline/# delimited token. Unlike read_ident this
+ * keeps '=', '+', '(' and ')' so forms like "lock=root+fifth" and ":inst(x)"
+ * survive intact. */
+static bool read_raw_token(parser_ctx_t *ctx, char *buf, size_t buf_size) {
+    size_t idx = 0;
+    while (ctx->pos < ctx->len) {
+        char c = peek_char(ctx);
+        if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == ',' || c == '#') break;
+        if (idx + 1 < buf_size) {
+            buf[idx++] = c;
+        }
+        next_char(ctx);
+    }
+    buf[idx] = '\0';
+    return idx > 0;
+}
+
+/* Capture the rest of the current line as a whitespace-normalized string (no
+ * trailing comment, no surrounding whitespace). Does not advance ctx. Used to
+ * preserve pattern RHS (group repeats, token repeats) verbatim. */
+static char *capture_rhs(parser_ctx_t *ctx) {
+    size_t start = ctx->pos;
+    size_t end = ctx->pos;
+    while (end < ctx->len && ctx->src[end] != '\n' && ctx->src[end] != '#') end++;
+    while (end > start && (ctx->src[end - 1] == ' ' || ctx->src[end - 1] == '\t' || ctx->src[end - 1] == '\r')) end--;
+
+    char *out = (char *)malloc(end - start + 1);
+    if (!out) return NULL;
+    size_t o = 0;
+    bool in_ws = false;
+    for (size_t i = start; i < end; i++) {
+        char c = ctx->src[i];
+        if (c == ' ' || c == '\t' || c == '\r') {
+            if (o > 0) in_ws = true;
+        } else {
+            if (in_ws && o > 0) out[o++] = ' ';
+            in_ws = false;
+            out[o++] = c;
+        }
+    }
+    out[o] = '\0';
+    return out;
+}
+
+static void section_add_part(bax_section_t *sec, const char *role, const char *pattern) {
+    if (sec->part_count >= BAX_MAX_CHANNELS) return;
+    bax_section_part_t *part = &sec->parts[sec->part_count++];
+    strncpy(part->part_name, role, sizeof(part->part_name) - 1);
+    part->patterns = (char **)malloc(sizeof(char *));
+    if (!part->patterns) return;
+    part->patterns[0] = bax_strdup(pattern);
+    part->pattern_count = 1;
+    part->pattern_capacity = 1;
+}
+
 static bool read_string_literal(parser_ctx_t *ctx, char *buf, size_t buf_size) {
     skip_whitespace_inline(ctx);
     if (ctx->pos + 2 < ctx->len &&
@@ -218,8 +273,27 @@ static bool parse_macro_array(const char *str, bax_macro_env_t *macro) {
 
 static bool parse_wave_array(const char *str, bax_gb_wave_t *wave) {
     wave->count = 0;
-    const char *p = strchr(str, '[');
-    if (!p) return false;
+    const char *p = str;
+    while (*p == '"' || *p == '\'' || *p == ' ' || *p == '\t') p++;
+
+    /* hUGETracker hex form: one hex digit per nibble, e.g. "0478ABBB…" (unquoted or quoted). */
+    if (*p != '[') {
+        size_t n = 0;
+        while (*p && *p != '"' && *p != '\'' && n < BAX_MAX_WAVE_SAMPLES) {
+            char c = *p;
+            int v = -1;
+            if (c >= '0' && c <= '9') v = c - '0';
+            else if (c >= 'a' && c <= 'f') v = c - 'a' + 10;
+            else if (c >= 'A' && c <= 'F') v = c - 'A' + 10;
+            if (v >= 0) {
+                wave->samples[n++] = (uint8_t)v;
+            }
+            p++;
+        }
+        wave->count = n;
+        return n > 0;
+    }
+
     p++;
     while (*p && *p != ']') {
         while (*p == ' ' || *p == '\t' || *p == ',') p++;
@@ -259,6 +333,33 @@ static void parse_json_object(const char *str, const char *key, char *out_val, s
     }
 }
 
+static void parse_env_compact(const char *str, bax_instrument_t *inst) {
+    inst->env.level = (uint8_t)atoi(str);
+    const char *c1 = strchr(str, ',');
+    if (!c1) return;
+    c1++;
+    if (strncmp(c1, "up", 2) == 0) inst->env.direction = BAX_ENV_DIR_UP;
+    else if (strncmp(c1, "flat", 4) == 0) inst->env.direction = BAX_ENV_DIR_FLAT;
+    else inst->env.direction = BAX_ENV_DIR_DOWN;
+    const char *c2 = strchr(c1, ',');
+    if (c2) {
+        inst->env.period = (uint8_t)atoi(c2 + 1);
+    } else {
+        /* BeatBax defaults a missing period to 1 (flat forces 0). */
+        inst->env.period = (inst->env.direction == BAX_ENV_DIR_FLAT) ? 0 : 1;
+    }
+}
+
+static void parse_sweep_compact(const char *str, bax_instrument_t *inst) {
+    inst->sweep.time = (uint8_t)atoi(str);
+    const char *c1 = strchr(str, ',');
+    if (!c1) return;
+    c1++;
+    inst->sweep.direction = (strncmp(c1, "down", 4) == 0) ? BAX_SWEEP_DIR_DOWN : BAX_SWEEP_DIR_UP;
+    const char *c2 = strchr(c1, ',');
+    if (c2) inst->sweep.shift = (uint8_t)atoi(c2 + 1);
+}
+
 static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
     if (strncmp(opt, "type=", 5) == 0) {
         const char *val = opt + 5;
@@ -278,20 +379,14 @@ static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
             parse_json_object(val, "level", buf, sizeof(buf));
             inst->env.level = (uint8_t)atoi(buf);
             parse_json_object(val, "direction", buf, sizeof(buf));
-            inst->env.direction = (strcmp(buf, "up") == 0) ? BAX_ENV_DIR_UP : BAX_ENV_DIR_DOWN;
+            if (strcmp(buf, "up") == 0) inst->env.direction = BAX_ENV_DIR_UP;
+            else if (strcmp(buf, "flat") == 0) inst->env.direction = BAX_ENV_DIR_FLAT;
+            else inst->env.direction = BAX_ENV_DIR_DOWN;
             parse_json_object(val, "period", buf, sizeof(buf));
             inst->env.period = (uint8_t)atoi(buf);
-        } else if (strncmp(val, "gb:", 3) == 0) {
-            val += 3;
-            inst->env.level = (uint8_t)atoi(val);
-            const char *c1 = strchr(val, ',');
-            if (c1) {
-                c1++;
-                if (strncmp(c1, "up", 2) == 0) inst->env.direction = BAX_ENV_DIR_UP;
-                else inst->env.direction = BAX_ENV_DIR_DOWN;
-                const char *c2 = strchr(c1, ',');
-                if (c2) inst->env.period = (uint8_t)atoi(c2 + 1);
-            }
+        } else {
+            if (strncmp(val, "gb:", 3) == 0) val += 3;
+            parse_env_compact(val, inst);
         }
     } else if (strncmp(opt, "sweep=", 6) == 0) {
         const char *val = opt + 6;
@@ -305,6 +400,8 @@ static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
             inst->sweep.direction = (strcmp(buf, "down") == 0) ? BAX_SWEEP_DIR_DOWN : BAX_SWEEP_DIR_UP;
             parse_json_object(val, "shift", buf, sizeof(buf));
             inst->sweep.shift = (uint8_t)atoi(buf);
+        } else {
+            parse_sweep_compact(val, inst);
         }
     } else if (strncmp(opt, "volume=", 7) == 0) {
         inst->wave_volume = (uint8_t)atoi(opt + 7);
@@ -312,6 +409,8 @@ static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
         parse_wave_array(opt + 5, &inst->wave);
     } else if (strncmp(opt, "gb:width=", 9) == 0) {
         inst->noise_width = (uint8_t)atoi(opt + 9);
+    } else if (strncmp(opt, "width=", 6) == 0) {
+        inst->noise_width = (uint8_t)atoi(opt + 6);
     } else if (strncmp(opt, "uge_note=", 9) == 0) {
         strncpy(inst->uge_note, opt + 9, sizeof(inst->uge_note) - 1);
     } else if (strncmp(opt, "note=", 5) == 0) {
@@ -328,6 +427,19 @@ static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
         parse_macro_array(opt + 8, &inst->vol_env);
     } else if (strncmp(opt, "pitch_env=", 10) == 0) {
         parse_macro_array(opt + 10, &inst->pitch_env);
+    } else if (strncmp(opt, "duty_env=", 9) == 0) {
+        parse_macro_array(opt + 9, &inst->duty_env);
+    } else if (strncmp(opt, "arp_env=", 8) == 0) {
+        parse_macro_array(opt + 8, &inst->arp_env);
+    } else if (strncmp(opt, "gb:pan=", 7) == 0) {
+        strncpy(inst->pan, opt + 7, sizeof(inst->pan) - 1);
+        inst->pan_gb = true;
+    } else if (strncmp(opt, "pan=", 4) == 0) {
+        strncpy(inst->pan, opt + 4, sizeof(inst->pan) - 1);
+        inst->pan_gb = false;
+    } else {
+        /* Unsupported option — do not silently drop it. */
+        return false;
     }
     return true;
 }
@@ -351,6 +463,11 @@ static bool parse_pattern_token(const char *tok, bax_pat_token_t *ptok) {
     if (strncmp(tok, "vol:", 4) == 0) {
         ptok->kind = BAX_TOKEN_INLINE_VOL;
         ptok->vol_level = atoi(tok + 4);
+        strncpy(ptok->text, tok, sizeof(ptok->text) - 1);
+        return true;
+    }
+    if (strncmp(tok, "inst(", 5) == 0) {
+        ptok->kind = BAX_TOKEN_INLINE_INST;
         strncpy(ptok->text, tok, sizeof(ptok->text) - 1);
         return true;
     }
@@ -418,6 +535,7 @@ static bool parse_pattern_token(const char *tok, bax_pat_token_t *ptok) {
 static bool parse_seq_item(const char *tok, bax_seq_item_t *item) {
     memset(item, 0, sizeof(bax_seq_item_t));
     item->vol_override = -1;
+    strncpy(item->raw, tok, sizeof(item->raw) - 1);
 
     char base[BAX_MAX_NAME_LEN];
     base[0] = '\0';
@@ -452,6 +570,7 @@ static bool parse_seq_item(const char *tok, bax_seq_item_t *item) {
             while (*p && *p != ')') p++;
             if (*p == ')') p++;
         } else {
+            /* Unknown :modifier — preserved verbatim in item->raw. */
             while (*p && *p != ':') p++;
         }
     }
@@ -617,7 +736,18 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                 }
                 opt_buf[oi] = '\0';
                 if (oi > 0) {
-                    parse_instrument_option(inst, opt_buf);
+                    if (!parse_instrument_option(inst, opt_buf)) {
+                        char opt_key[64];
+                        const char *eq = strchr(opt_buf, '=');
+                        size_t klen = eq ? (size_t)(eq - opt_buf) : strlen(opt_buf);
+                        if (klen >= sizeof(opt_key)) klen = sizeof(opt_key) - 1;
+                        memcpy(opt_key, opt_buf, klen);
+                        opt_key[klen] = '\0';
+                        bax_error_set(out_err, BAX_ERR_UNSUPPORTED_CONSTRUCT, line_start, col_start,
+                                      "inst", "unsupported instrument option: %s", opt_key);
+                        bax_song_free(out_song);
+                        return false;
+                    }
                 }
             }
         } else if (strcmp(keyword, "effect") == 0) {
@@ -637,12 +767,14 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
             }
             eff_expr[ei] = '\0';
 
-            bax_effect_type_t etype = BAX_EFFECT_NONE;
+            bax_effect_type_t etype = BAX_EFFECT_OTHER;
             if (strncmp(eff_expr, "vib:", 4) == 0) etype = BAX_EFFECT_VIBRATO;
             else if (strncmp(eff_expr, "arp:", 4) == 0) etype = BAX_EFFECT_ARPEGGIO;
             else if (strncmp(eff_expr, "port:", 5) == 0) etype = BAX_EFFECT_PORTAMENTO;
+            else if (strncmp(eff_expr, "bend:", 5) == 0) etype = BAX_EFFECT_BEND;
 
             bax_effect_t *eff = bax_song_add_effect(out_song, eff_name, etype);
+            strncpy(eff->raw_expr, eff_expr, sizeof(eff->raw_expr) - 1);
             if (etype == BAX_EFFECT_VIBRATO) {
                 const char *p = eff_expr + 4;
                 eff->params.vib.speed = atoi(p);
@@ -660,6 +792,10 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                 const char *c1 = strchr(p, ',');
                 if (c1) {
                     eff->params.arp.semi2 = atoi(c1 + 1);
+                    const char *c2 = strchr(c1 + 1, ',');
+                    if (c2) {
+                        eff->params.arp.semi3 = atoi(c2 + 1);
+                    }
                 }
             } else if (etype == BAX_EFFECT_PORTAMENTO) {
                 eff->params.port.speed = atoi(eff_expr + 5);
@@ -733,6 +869,7 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
             if (peek_char(&ctx) == '=') next_char(&ctx);
 
             bax_pattern_t *pat = bax_song_add_pattern(out_song, pat_name);
+            pat->rhs = capture_rhs(&ctx);
 
             /* Read tokens until newline */
             while (ctx.pos < ctx.len && peek_char(&ctx) != '\n') {
@@ -769,7 +906,14 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                     bax_pat_token_t *ptok = &pat->tokens[pat->token_count++];
                     memset(ptok, 0, sizeof(bax_pat_token_t));
                     ptok->kind = BAX_TOKEN_INLINE_INST;
-                    strncpy(ptok->text, inst_tok, sizeof(ptok->text) - 1);
+                    /* "inst " + name; clamp long names to avoid truncation. */
+                    size_t ilen = strlen(inst_tok);
+                    if (ilen > sizeof(ptok->text) - 6) {
+                        ilen = sizeof(ptok->text) - 6;
+                    }
+                    memcpy(ptok->text, "inst ", 5);
+                    memcpy(ptok->text + 5, inst_tok, ilen);
+                    ptok->text[5 + ilen] = '\0';
                     continue;
                 }
 
@@ -822,24 +966,99 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                 bax_seq_item_t *item = &seq->items[seq->item_count++];
                 parse_seq_item(item_tok, item);
             }
-        } else if (strcmp(keyword, "channel") == 0) {
-            char ch_num_str[16];
-            read_ident(&ctx, ch_num_str, sizeof(ch_num_str));
-            int ch_num = atoi(ch_num_str);
-            if (ch_num < 1 || ch_num > BAX_MAX_CHANNELS) {
-                bax_error_set(out_err, BAX_ERR_INVALID_CHANNEL, line_start, col_start,
-                              "channel", "channel number %d out of range (1..%d)", ch_num, BAX_MAX_CHANNELS);
-                bax_song_free(out_song);
-                return false;
-            }
-            bax_channel_t *ch = &out_song->channels[ch_num - 1];
+        } else if (strcmp(keyword, "section") == 0) {
+            char sec_name[BAX_MAX_NAME_LEN];
+            read_ident(&ctx, sec_name, sizeof(sec_name));
 
+            /* Beginner Mode `section <name> use p1 p2 p3 p4` → block with the
+             * Game Boy default roles mel/harm/bass/perc (BeatBax's own desugar). */
             skip_whitespace_inline(&ctx);
-            if (ctx.pos + 1 < ctx.len && ctx.src[ctx.pos] == '=' && ctx.src[ctx.pos + 1] == '>') {
-                next_char(&ctx);
-                next_char(&ctx);
+            if (ctx.pos + 3 <= ctx.len &&
+                strncmp(ctx.src + ctx.pos, "use", 3) == 0 &&
+                (ctx.pos + 3 == ctx.len ||
+                 !(isalnum((unsigned char)ctx.src[ctx.pos + 3]) || ctx.src[ctx.pos + 3] == '_'))) {
+                ctx.pos += 3;
+                ctx.col += 3;
+                char lanes[4][BAX_MAX_NAME_LEN];
+                size_t lane_count = 0;
+                for (size_t i = 0; i < 4; i++) {
+                    skip_whitespace_inline(&ctx);
+                    if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '\0' || peek_char(&ctx) == '#') break;
+                    if (!read_ident(&ctx, lanes[i], sizeof(lanes[i]))) break;
+                    lane_count++;
+                }
+                if (lane_count != 4) {
+                    bax_error_set(out_err, BAX_ERR_SYNTAX, line_start, col_start,
+                                  "section", "section '%s' use requires exactly 4 lanes (mel harm bass perc)", sec_name);
+                    bax_song_free(out_song);
+                    return false;
+                }
+                bax_section_t *sec = bax_song_add_section(out_song, sec_name);
+                section_add_part(sec, "mel", lanes[0]);
+                section_add_part(sec, "harm", lanes[1]);
+                section_add_part(sec, "bass", lanes[2]);
+                section_add_part(sec, "perc", lanes[3]);
+                /* Consume the rest of the line. */
+                while (ctx.pos < ctx.len && peek_char(&ctx) != '\n') next_char(&ctx);
+                continue;
             }
 
+            skip_whitespace_and_comments(&ctx);
+            if (peek_char(&ctx) == '{') next_char(&ctx);
+
+            bax_section_t *sec = bax_song_add_section(out_song, sec_name);
+
+            while (ctx.pos < ctx.len) {
+                skip_whitespace_and_comments(&ctx);
+                if (ctx.pos >= ctx.len) break;
+                if (peek_char(&ctx) == '}') {
+                    next_char(&ctx);
+                    break;
+                }
+
+                char part_name[BAX_MAX_NAME_LEN];
+                if (!read_ident(&ctx, part_name, sizeof(part_name))) {
+                    break;
+                }
+                skip_whitespace_inline(&ctx);
+                if (peek_char(&ctx) == '=') next_char(&ctx);
+
+                if (sec->part_count < BAX_MAX_CHANNELS) {
+                    bax_section_part_t *part = &sec->parts[sec->part_count++];
+                    strncpy(part->part_name, part_name, sizeof(part->part_name) - 1);
+                    part->pattern_count = 0;
+                    part->pattern_capacity = 0;
+                    part->patterns = NULL;
+
+                    while (ctx.pos < ctx.len && peek_char(&ctx) != '\n' && peek_char(&ctx) != '}') {
+                        skip_whitespace_inline(&ctx);
+                        if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '}' || peek_char(&ctx) == '\0') break;
+                        if (peek_char(&ctx) == '#') {
+                            skip_comment(&ctx);
+                            break;
+                        }
+                        char pat_tok[BAX_MAX_NAME_LEN];
+                        read_ident(&ctx, pat_tok, sizeof(pat_tok));
+                        if (pat_tok[0] == '\0') break;
+
+                        if (part->pattern_count >= part->pattern_capacity) {
+                            size_t new_cap = part->pattern_capacity == 0 ? 8 : part->pattern_capacity * 2;
+                            char **narr = (char **)realloc(part->patterns, new_cap * sizeof(char *));
+                            if (!narr) break;
+                            part->patterns = narr;
+                            part->pattern_capacity = new_cap;
+                        }
+                        part->patterns[part->pattern_count++] = bax_strdup(pat_tok);
+                    }
+                }
+            }
+        } else if (strcmp(keyword, "form") == 0) {
+            char form_name[BAX_MAX_NAME_LEN];
+            read_ident(&ctx, form_name, sizeof(form_name));
+            skip_whitespace_inline(&ctx);
+            if (peek_char(&ctx) == '=') next_char(&ctx);
+
+            bax_form_t *frm = bax_song_add_form(out_song, form_name);
             while (ctx.pos < ctx.len && peek_char(&ctx) != '\n') {
                 skip_whitespace_inline(&ctx);
                 if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '\0') break;
@@ -847,45 +1066,166 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                     skip_comment(&ctx);
                     break;
                 }
+                if (peek_char(&ctx) == '>' || peek_char(&ctx) == ',') {
+                    next_char(&ctx);
+                    continue;
+                }
+                char sname[BAX_MAX_NAME_LEN];
+                read_ident(&ctx, sname, sizeof(sname));
+                if (sname[0] == '\0') break;
 
-                char word[BAX_MAX_NAME_LEN];
-                read_ident(&ctx, word, sizeof(word));
-                if (strcmp(word, "inst") == 0) {
-                    read_ident(&ctx, ch->default_inst, sizeof(ch->default_inst));
-                } else if (strcmp(word, "seq") == 0) {
-                    /* Next words are sequence names */
-                    while (ctx.pos < ctx.len && peek_char(&ctx) != '\n') {
-                        skip_whitespace_inline(&ctx);
-                        if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '\0' || peek_char(&ctx) == '#') break;
-                        char sname[BAX_MAX_NAME_LEN];
-                        read_ident(&ctx, sname, sizeof(sname));
-                        if (strncmp(sname, "lock=", 5) == 0) {
-                            ch->lock_scale = true;
-                            continue;
-                        }
-                        if (sname[0] == '\0') break;
-
-                        if (ch->seq_count >= ch->seq_capacity) {
-                            size_t new_cap = ch->seq_capacity == 0 ? 4 : ch->seq_capacity * 2;
-                            char **narr = (char **)realloc(ch->seq_names, new_cap * sizeof(char *));
-                            if (!narr) break;
-                            ch->seq_names = narr;
-                            ch->seq_capacity = new_cap;
-                        }
-                        ch->seq_names[ch->seq_count++] = bax_strdup(sname);
+                if (frm->section_count >= frm->section_capacity) {
+                    size_t new_cap = frm->section_capacity == 0 ? 4 : frm->section_capacity * 2;
+                    char **narr = (char **)realloc(frm->section_names, new_cap * sizeof(char *));
+                    if (!narr) break;
+                    frm->section_names = narr;
+                    frm->section_capacity = new_cap;
+                }
+                frm->section_names[frm->section_count++] = bax_strdup(sname);
+            }
+        } else if (strcmp(keyword, "channel") == 0) {
+            skip_whitespace_inline(&ctx);
+            size_t save_pos = ctx.pos;
+            int save_line = ctx.line;
+            int save_col = ctx.col;
+            char maybe_auto[32];
+            read_ident(&ctx, maybe_auto, sizeof(maybe_auto));
+            if (strcmp(maybe_auto, "auto") == 0) {
+                char form_kw[32];
+                read_ident(&ctx, form_kw, sizeof(form_kw));
+                read_ident(&ctx, out_song->auto_form_name, sizeof(out_song->auto_form_name));
+                if (strcmp(form_kw, "form") != 0 || out_song->auto_form_name[0] == '\0') {
+                    bax_error_set(out_err, BAX_ERR_SYNTAX, line_start, col_start,
+                                  "channel", "channel auto requires 'form <name>'");
+                    bax_song_free(out_song);
+                    return false;
+                }
+                out_song->channel_auto_form = true;
+                skip_whitespace_inline(&ctx);
+                while (ctx.pos < ctx.len && peek_char(&ctx) != '\n' && peek_char(&ctx) != '#') {
+                    skip_whitespace_inline(&ctx);
+                    if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '#' || peek_char(&ctx) == '\0') break;
+                    char opt[BAX_MAX_STR_LEN];
+                    size_t oi = 0;
+                    while (ctx.pos < ctx.len && peek_char(&ctx) != ' ' && peek_char(&ctx) != '\t' &&
+                           peek_char(&ctx) != '\r' && peek_char(&ctx) != '\n' && peek_char(&ctx) != '#') {
+                        if (oi + 1 < sizeof(opt)) opt[oi++] = next_char(&ctx);
+                        else next_char(&ctx);
                     }
-                } else if (strncmp(word, "lock=", 5) == 0) {
-                    ch->lock_scale = true;
+                    opt[oi] = '\0';
+                    if (strncmp(opt, "inst=", 5) == 0) {
+                        strncpy(out_song->auto_form_inst, opt + 5, sizeof(out_song->auto_form_inst) - 1);
+                    }
+                }
+            } else {
+                ctx.pos = save_pos;
+                ctx.line = save_line;
+                ctx.col = save_col;
+                char ch_num_str[16];
+                read_ident(&ctx, ch_num_str, sizeof(ch_num_str));
+                int ch_num = atoi(ch_num_str);
+                if (ch_num < 1 || ch_num > BAX_MAX_CHANNELS) {
+                    bax_error_set(out_err, BAX_ERR_INVALID_CHANNEL, line_start, col_start,
+                                  "channel", "channel number %d out of range (1..%d)", ch_num, BAX_MAX_CHANNELS);
+                    bax_song_free(out_song);
+                    return false;
+                }
+                bax_channel_t *ch = &out_song->channels[ch_num - 1];
+
+                skip_whitespace_inline(&ctx);
+                if (ctx.pos + 1 < ctx.len && ctx.src[ctx.pos] == '=' && ctx.src[ctx.pos + 1] == '>') {
+                    next_char(&ctx);
+                    next_char(&ctx);
+                }
+
+                while (ctx.pos < ctx.len && peek_char(&ctx) != '\n') {
+                    skip_whitespace_inline(&ctx);
+                    if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '\0') break;
+                    if (peek_char(&ctx) == '#') {
+                        skip_comment(&ctx);
+                        break;
+                    }
+
+                    char tok[BAX_MAX_NAME_LEN];
+                    if (!read_raw_token(&ctx, tok, sizeof(tok))) {
+                        /* Guarantee progress on unexpected characters. */
+                        next_char(&ctx);
+                        continue;
+                    }
+
+                    if (strcmp(tok, "inst") == 0) {
+                        read_ident(&ctx, ch->default_inst, sizeof(ch->default_inst));
+                    } else if (strcmp(tok, "seq") == 0 || strcmp(tok, "pat") == 0) {
+                        ch->ref_is_pat = (strcmp(tok, "pat") == 0);
+                        /* Following raw tokens are pattern/sequence refs (until lock=/end). */
+                        while (ctx.pos < ctx.len && peek_char(&ctx) != '\n') {
+                            skip_whitespace_inline(&ctx);
+                            if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '\0' || peek_char(&ctx) == '#') break;
+                            char rname[BAX_MAX_NAME_LEN];
+                            if (!read_raw_token(&ctx, rname, sizeof(rname))) {
+                                next_char(&ctx);
+                                continue;
+                            }
+                            if (strncmp(rname, "lock=", 5) == 0) {
+                                strncpy(ch->lock_mode, rname + 5, sizeof(ch->lock_mode) - 1);
+                                continue;
+                            }
+                            if (ch->ref_count >= ch->ref_capacity) {
+                                size_t new_cap = ch->ref_capacity == 0 ? 4 : ch->ref_capacity * 2;
+                                char **narr = (char **)realloc(ch->ref_names, new_cap * sizeof(char *));
+                                if (!narr) break;
+                                ch->ref_names = narr;
+                                ch->ref_capacity = new_cap;
+                            }
+                            ch->ref_names[ch->ref_count++] = bax_strdup(rname);
+                        }
+                    } else if (strcmp(tok, "role") == 0) {
+                        read_ident(&ctx, ch->role, sizeof(ch->role));
+                    } else if (strcmp(tok, "form") == 0) {
+                        read_ident(&ctx, ch->form_ref, sizeof(ch->form_ref));
+                    } else if (strncmp(tok, "lock=", 5) == 0) {
+                        strncpy(ch->lock_mode, tok + 5, sizeof(ch->lock_mode) - 1);
+                    } else if (strncmp(tok, "speed=", 6) == 0 || strcmp(tok, "speed") == 0 ||
+                               strncmp(tok, "bpm=", 4) == 0 || strcmp(tok, "bpm") == 0) {
+                        bax_error_set(out_err, BAX_ERR_UNSUPPORTED_CONSTRUCT, line_start, col_start,
+                                      tok, "unsupported channel directive: %s (channel-level timing)", tok);
+                        bax_song_free(out_song);
+                        return false;
+                    } else {
+                        bax_error_set(out_err, BAX_ERR_UNSUPPORTED_CONSTRUCT, line_start, col_start,
+                                      tok, "unsupported channel directive: %s", tok);
+                        bax_song_free(out_song);
+                        return false;
+                    }
+                }
+
+                if ((ch->role[0] != '\0') != (ch->form_ref[0] != '\0')) {
+                    bax_error_set(out_err, BAX_ERR_SYNTAX, line_start, col_start,
+                                  "channel", "channel %d: 'role' and 'form' are required together", ch_num);
+                    bax_song_free(out_song);
+                    return false;
                 }
             }
         } else if (strcmp(keyword, "play") == 0) {
             out_song->has_play = true;
-            skip_whitespace_inline(&ctx);
-            if (ctx.pos < ctx.len && peek_char(&ctx) != '\n' && peek_char(&ctx) != '#') {
-                char mode[32];
-                read_ident(&ctx, mode, sizeof(mode));
-                if (strcmp(mode, "auto") == 0) {
+            while (ctx.pos < ctx.len && peek_char(&ctx) != '\n') {
+                skip_whitespace_inline(&ctx);
+                if (peek_char(&ctx) == '\n' || peek_char(&ctx) == '\0' || peek_char(&ctx) == '#') break;
+                char flag[32];
+                read_ident(&ctx, flag, sizeof(flag));
+                if (flag[0] == '\0') {
+                    next_char(&ctx);
+                    continue;
+                }
+                if (strcmp(flag, "auto") == 0) {
                     out_song->play_auto = true;
+                } else if (strcmp(flag, "repeat") == 0) {
+                    out_song->play_repeat = true;
+                } else {
+                    bax_error_set(out_err, BAX_ERR_SYNTAX, line_start, col_start,
+                                  "play", "unknown 'play' flag: %s (valid: auto, repeat)", flag);
+                    bax_song_free(out_song);
+                    return false;
                 }
             }
         } else {

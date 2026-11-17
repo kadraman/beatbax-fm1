@@ -91,3 +91,30 @@ The FM-1 UI will edit a structured model, not source text. Without a host round-
 - [specs/global/compatibility.md](../../global/compatibility.md)
 - https://beatbax.com/docs
 - https://github.com/kadraman/beatbax
+
+## Amendment (sections, forms, and wider Game Boy surface)
+
+After initial ship, the supported surface was extended so richer Game Boy songs round-trip
+without silent simplification:
+
+- **Sections** — `section <name> { <role> = <pattern>... }` and Beginner Mode
+  `section <name> use p1 p2 p3 p4` (desugared to `mel`/`harm`/`bass`/`perc`).
+- **Forms** — `form <name> = <section>[,|>] <section>...` (canonical separator `,`).
+- **Channel auto routing** — `channel auto form <name> inst=<i1>|<i2>|<i3>|<i4>`.
+- **Channel binding** — `seq <refs>`, `pat <refs>`, and advanced `role <r> form <f>` (role+form
+  required together); refs preserve `:modifiers` verbatim.
+- **Channel lock modes** — `lock=scale|root+fifth|chord|chord7|octaves` preserved.
+- **Play flags** — `play auto repeat`.
+- **Envelopes** — compact `<level>,<dir>[,<period>]` / `gb:...` and `flat`; compact `sweep=`.
+- **Wave** — 32-nibble hUGETracker hex strings.
+- **Pan** — `pan=` / `gb:pan=` on instruments (inline `<pan:…>` and `:pan(…)` preserved verbatim).
+- **Software macros** — `duty_env` / `arp_env` in addition to `vol_env` / `pitch_env`.
+- **Pattern RHS and sequence references preserved verbatim** (whitespace-normalised), so group
+  repeats `( … )*N`, token repeats `*N`, and sequence modifiers (`:rev`, `:st`, `:slow`, `:pan`,
+  named-effect presets, …) round-trip byte-stable without inventing a sub-grammar.
+- **Effect RHS preserved verbatim** (`arp:<a>,<b>,<c>`, `vib:…,<waveform>,<arg>`, `bend:…`).
+
+Coverage is machine-checked against BeatBax's granular feature fixtures: see
+[tools/bax-coverage.json](../../../tools/bax-coverage.json) and `tools/test-bax-coverage.py`.
+These constructs are BeatBax 0.6.1 syntax; nothing was invented. See
+[docs/song-model.md](../../../docs/song-model.md) for the full supported surface.

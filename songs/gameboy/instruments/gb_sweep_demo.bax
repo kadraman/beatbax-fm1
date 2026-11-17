@@ -1,0 +1,55 @@
+## gb_sweep_demo.bax
+## Gameboy Sweep demo showcasing frequency sweep on pulse1
+
+song name "Sweep Demo"
+song artist "kadraman"
+song description """Sweep demo showcasing frequency sweep on pulse1."""
+song tags "instruments,example,gameboy,sweep"
+
+chip gameboy
+bpm 80
+
+# Listen for:
+# - inst plain: NO sweep (comparison - steady pitch)
+# - inst riser: RISING pitch sweep (raising/siren effect)
+# - inst faller: FALLING pitch sweep (dropping/falling effect)
+
+# Sweep instruments
+inst plain type=pulse1 duty=50 env={"level":15,"direction":"down","period":7}
+  # env={"level":15,"direction":"down","period":7} Start at max volume, slow decay (period=7)
+  # NO sweep - steady pitch for comparison
+
+inst riser type=pulse1 duty=50 env={"level":15,"direction":"down","period":7} sweep={"time":7,"direction":"up","shift":3}
+  # env={"level":15,"direction":"down","period":7} Start at max volume, slow decay (period=7)
+  # Sweep parameters: time,direction,shift
+  # sweep={"time":7,"direction":"up","shift":3} Rising pitch, freq += freq/4 every 54ms
+  # Effect: rising siren/bounce sound
+
+inst faller type=pulse1 duty=50 env={"level":15,"direction":"down","period":7} sweep={"time":6,"direction":"down","shift":5}
+  # env={"level":15,"direction":"down","period":7} Start at max volume, slow decay (period=7)
+  # Sweep parameters: time,direction,shift
+  # sweep={"time":6,"direction":"down","shift":5} Falling pitch, freq -= freq/4 every 47ms
+  # Effect: falling siren/bomb drop
+
+# Structured sweep example (explicit object form). Parser accepts both
+# string form and structured object; this demonstrates the structured form.
+# This instrument uses the structured object.
+inst structured_riser type=pulse1 duty=50 env={"level":15,"direction":"down","period":7} sweep={"time":7,"direction":"up","shift":3}
+  # same behavior as `sweep={"time":7,"direction":"up","shift":3}` but stored and parsed as an object
+  # Useful for tools that consume AST directly.
+
+# Patterns with LONG notes using :duration syntax
+# C4:16 = hold C4 for 16 ticks (about 2 second at 80 BPM)
+# This gives sweep TIME to change the pitch during the note
+pat demo_pat = C4:16
+
+# Sequences
+seq no_sweep_seq = demo_pat:inst(plain)
+seq rising_sweep_seq = demo_pat:inst(riser):oct(-2)
+seq falling_sweep_seq = demo_pat:inst(faller)
+seq rising_struct_seq = demo_pat:inst(structured_riser):oct(-2)
+
+# Channels - play one after another for comparison
+channel 1 => inst plain seq no_sweep_seq rising_sweep_seq falling_sweep_seq rising_struct_seq
+
+play

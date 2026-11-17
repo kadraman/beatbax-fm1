@@ -29,7 +29,7 @@ export AC79_SDK        ?= $(HOME)/.jieli/ac79-sdk
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all clean build package test test-host test-unit
+.PHONY: help all clean build package test test-host test-unit test-coverage
 
 help:
 	@echo "BeatBax FM-1 (firmware & host tooling)"
@@ -60,7 +60,10 @@ test-unit:
 test-host:
 	$(PYTHON) tools/verify-bax.py
 
-test: test-host
+test-coverage:
+	$(PYTHON) tools/test-bax-coverage.py
+
+test: test-host test-coverage
 
 # --- Firmware targets (WSL/Linux) ---
 

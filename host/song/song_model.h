@@ -47,7 +47,8 @@ typedef enum {
 
 typedef enum {
     BAX_ENV_DIR_DOWN = 0,
-    BAX_ENV_DIR_UP
+    BAX_ENV_DIR_UP,
+    BAX_ENV_DIR_FLAT
 } bax_env_direction_t;
 
 typedef enum {
@@ -106,6 +107,12 @@ typedef struct {
 
     bax_macro_env_t vol_env;
     bax_macro_env_t pitch_env;
+    bax_macro_env_t duty_env;
+    bax_macro_env_t arp_env;
+
+    /* Pan (generic pan= or GB NR51 gb:pan=) */
+    char pan[16];          /* "L", "R", "C", or numeric string; "" if unset */
+    bool pan_gb;           /* true if authored as gb:pan= */
 
     /* Raw options preservation for formatting */
     bool has_env_object_syntax;
@@ -116,12 +123,15 @@ typedef enum {
     BAX_EFFECT_NONE = 0,
     BAX_EFFECT_VIBRATO,
     BAX_EFFECT_ARPEGGIO,
-    BAX_EFFECT_PORTAMENTO
+    BAX_EFFECT_PORTAMENTO,
+    BAX_EFFECT_BEND,
+    BAX_EFFECT_OTHER
 } bax_effect_type_t;
 
 typedef struct {
     char name[BAX_MAX_NAME_LEN];
     bax_effect_type_t type;
+    char raw_expr[BAX_MAX_STR_LEN];
     union {
         struct {
             int speed;
@@ -131,6 +141,7 @@ typedef struct {
         struct {
             int semi1;
             int semi2;
+            int semi3;
         } arp;
         struct {
             int speed;
@@ -173,6 +184,7 @@ typedef struct {
     bax_pat_token_t *tokens;
     size_t token_count;
     size_t token_capacity;
+    char *rhs;                        /* raw pattern RHS (authoritative for round-trip); NULL if reconstructed from tokens */
 } bax_pattern_t;
 
 typedef struct {
@@ -180,6 +192,7 @@ typedef struct {
     char inst_override[BAX_MAX_NAME_LEN];
     int oct_offset;                   /* 0 if none */
     int vol_override;                 /* -1 if none */
+    char raw[BAX_MAX_STR_LEN];        /* full item text (modifiers preserved verbatim) */
 } bax_seq_item_t;
 
 typedef struct {
@@ -192,11 +205,34 @@ typedef struct {
 typedef struct {
     int channel_num;                  /* 1..4 */
     char default_inst[BAX_MAX_NAME_LEN];
-    char **seq_names;
-    size_t seq_count;
-    size_t seq_capacity;
-    bool lock_scale;
+    char **ref_names;                 /* `seq <refs>` or `pat <refs>` (modifiers preserved verbatim) */
+    size_t ref_count;
+    size_t ref_capacity;
+    bool ref_is_pat;                  /* true if bound with `pat`, false if `seq` */
+    char role[BAX_MAX_NAME_LEN];      /* advanced role binding (e.g. "mel") */
+    char form_ref[BAX_MAX_NAME_LEN];  /* form name for role binding (e.g. "main") */
+    char lock_mode[BAX_MAX_NAME_LEN]; /* "" | "scale" | "root+fifth" | "chord" | "chord7" | "octaves" */
 } bax_channel_t;
+
+typedef struct {
+    char part_name[BAX_MAX_NAME_LEN];   /* e.g. "mel", "harm", "bass", "perc" */
+    char **patterns;
+    size_t pattern_count;
+    size_t pattern_capacity;
+} bax_section_part_t;
+
+typedef struct {
+    char name[BAX_MAX_NAME_LEN];        /* e.g. "theme", "build", "turn", "reprise" */
+    bax_section_part_t parts[BAX_MAX_CHANNELS];
+    size_t part_count;
+} bax_section_t;
+
+typedef struct {
+    char name[BAX_MAX_NAME_LEN];        /* e.g. "main" */
+    char **section_names;
+    size_t section_count;
+    size_t section_capacity;
+} bax_form_t;
 
 typedef struct {
     /* Metadata */
@@ -239,12 +275,28 @@ typedef struct {
     size_t sequence_count;
     size_t sequence_capacity;
 
+    /* Sections */
+    bax_section_t *sections;
+    size_t section_count;
+    size_t section_capacity;
+
+    /* Forms */
+    bax_form_t *forms;
+    size_t form_count;
+    size_t form_capacity;
+
+    /* Auto form routing */
+    bool channel_auto_form;
+    char auto_form_name[BAX_MAX_NAME_LEN];
+    char auto_form_inst[BAX_MAX_STR_LEN];
+
     /* Channels (1..4) */
     bax_channel_t channels[BAX_MAX_CHANNELS];
 
     /* Transport */
     bool has_play;
     bool play_auto;
+    bool play_repeat;
 } bax_song_t;
 
 /* Initialize an empty song structure */
@@ -259,6 +311,8 @@ bax_effect_t *bax_song_add_effect(bax_song_t *song, const char *name, bax_effect
 bax_subpat_t *bax_song_add_subpat(bax_song_t *song, const char *name);
 bax_pattern_t *bax_song_add_pattern(bax_song_t *song, const char *name);
 bax_sequence_t *bax_song_add_sequence(bax_song_t *song, const char *name);
+bax_section_t *bax_song_add_section(bax_song_t *song, const char *name);
+bax_form_t *bax_song_add_form(bax_song_t *song, const char *name);
 
 /* Helpers to find entities */
 const bax_instrument_t *bax_song_find_instrument(const bax_song_t *song, const char *name);
@@ -266,6 +320,8 @@ const bax_effect_t *bax_song_find_effect(const bax_song_t *song, const char *nam
 const bax_subpat_t *bax_song_find_subpat(const bax_song_t *song, const char *name);
 const bax_pattern_t *bax_song_find_pattern(const bax_song_t *song, const char *name);
 const bax_sequence_t *bax_song_find_sequence(const bax_song_t *song, const char *name);
+const bax_section_t *bax_song_find_section(const bax_song_t *song, const char *name);
+const bax_form_t *bax_song_find_form(const bax_song_t *song, const char *name);
 
 #ifdef __cplusplus
 }

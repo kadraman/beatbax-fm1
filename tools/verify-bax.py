@@ -60,6 +60,8 @@ def main():
         "songs/gameboy/gb_sweep_demo.canon.bax",
         "songs/gameboy/gb_uge_note_demo.bax",
         "songs/gameboy/gb_uge_note_demo.canon.bax",
+        "songs/gameboy/grassland_dash.bax",
+        "songs/gameboy/grassland_dash.canon.bax",
     ]
 
     for fix in fixtures:

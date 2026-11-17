@@ -1,0 +1,213 @@
+## grassland_dash.bax
+## Original platformer theme — in the spirit of classic 8-bit adventure games.
+## Key: G major | Tempo: 149 BPM | Style: Bouncy, energetic
+##
+## This is an entirely original composition — it does not reproduce any copyrighted material.
+## A buoyant G-major theme built on bouncy 16th-note phrases, lyrical portamento runs, and a
+## vibrato-laden bridge; the wave channel time-shares a plucked-kick waveform with the bass
+## to free the noise channel for snare and hi-hat colour.
+##
+## Structure (13 bars):
+##   Bars  1– 4 : Theme A (×2)   — main phrase + answer in G major
+##   Bars  5– 6 : Build          — ascending portamento run + vibrato bridge phrase
+##   Bars  7– 9 : Turnaround     — pitch-riser, arpeggiated fill, shimmer dive
+##   Bars 10–13 : A reprise (×2) — theme returns to close
+##
+## Channels:
+##   Ch1 (Pulse1): Melody — buoyant hook, portamento run, vibrato bridge, shimmer coda
+##   Ch2 (Pulse2): Harmony — arpeggiated chord voicings and portamento counter-line
+##   Ch3 (Wave  ): Bass + kick time-share — wavekick on beats 1+3, bass on off-beats
+##   Ch4 (Noise ): Percussion — snare + hi-hat groove; noise kick on build/turnaround anchors
+##
+## Effects demonstrated:
+##   arp  : rapid chord cycling on held notes (majorArp, minorArp, domArp)
+##   port : legato slides for melodic runs and bass passages (slide, slowSlide)
+##   bend : upward pitch riser into the bridge, downward dive at phrase end (riser, dive)
+##   vib  : light pitch wobble on bridge's sustained notes; shimmer on final cadence (wobble, shimmer)
+##
+## Play: node bin/beatbax play songs/gameboy/grassland_dash.bax
+
+song name "Grassland Dash"
+song artist "The BeatBax Team"
+song description """An original upbeat platformer theme in G major. Inspired by the energetic spirit of classic 8-bit game soundtracks. Demonstrates arpeggio, portamento, pitchbend and vibrato effects across all four Game Boy channels."""
+song tags "original,platformer,demo,effects"
+
+chip gameboy
+bpm 149
+
+# =============================================================================
+# Instruments
+# =============================================================================
+#
+# melody   — Pulse1:  bright, snappy duty-50 pulse. Carries the main theme.
+# harmony  — Pulse2:  duty-50, softer env. Arpeggiated chord fill and counter-melody.
+# bass1/2  — Wave:    triangle / organ-ish wavetables. Walking bass on off-beats.
+# wavekick — Wave:    short pluck accent on beats 1+3; time-shares ch3 with the bass.
+#                     (No pitch_env — a falling kick fights the walking bass on the same channel.)
+#                     Kept off beats 2+4 so it doesn't stack on the noise snare.
+# kick     — Noise:   C-6 + pitch_env/vol_env; used in drums_anchor when wave is busy.
+# snare    — Noise:   mid-range crack on beats 2 and 4 (7-bit).
+# hat      — Noise:   very short, quiet hi-hat fills on up-beats (15-bit).
+
+inst melody  type=pulse1 duty=50  env={"level":15,"direction":"down","period":1,"format":"gb"} gm=80
+inst melody_hold type=pulse1 duty=50 env={"level":15,"direction":"flat","period":0,"format":"gb"} gm=80
+inst harmony type=pulse2 duty=50  env={"level":8,"direction":"down","period":3,"format":"gb"}  gm=80
+inst bass1    type=wave volume=50  wave=[8,9,10,11,12,13,14,15,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,0,1,2,3,4,5,6,7]
+inst bass2   type=wave volume=50  wave=[7,7,7,5,0,0,0,0,0,0,0,0,0,0,0,0,15,15,15,14,14,14,14,14,14,12,2,2,1,7,7,6]
+inst kick     type=noise gb:width=7  env={"level":14,"direction":"down","period":1,"format":"gb"} length=16 uge_note=C-6 pitch_env=[0,-2,-4,-6] vol_env=[15,12,8,4]
+inst snare    type=noise gb:width=7  env={"level":10,"direction":"down","period":2,"format":"gb"} length=16 uge_note=C-7 pitch_env=[0,7,0] vol_env=[12,8,4]
+inst hat      type=noise gb:width=15 env={"level":4,"direction":"down","period":1,"format":"gb"} length=8  uge_note=C-8 vol_env=[5,2]
+inst wavekick type=wave volume=50  wave=[12,10,8,5,3,1,0,0,0,0,0,0,0,0,0,0] note=C2
+
+# =============================================================================
+# Effect presets
+# =============================================================================
+
+effect majorArp  = arp:4,7           # major triad  (root + maj3 + P5)
+effect minorArp  = arp:3,7           # minor triad  (root + min3 + P5)
+effect domArp    = arp:4,7,10        # dominant 7th (root + maj3 + P5 + min7)
+
+effect slide     = port:96           # fast UGE-friendly glide between short steps
+effect slowSlide = port:64           # UGE-friendly glide for short bass run notes
+
+effect riser     = bend:+12,exp,0,1  # dramatic one-octave rise — bridge lead-in
+effect faller     = bend:-1212,exp,0,1  # dramatic one-octave fall — bridge lead-in
+effect dive      = bend:-12,log,0,1  # falling pitch drop at phrase end
+
+effect wobble    = vib:3,5,sine,3    # gentle pitch wobble on bridge's sustained notes
+effect shimmer   = vib:2,8,sine,2    # fast, subtle shimmer on the final cadence
+
+# =============================================================================
+# MELODY PATTERNS (Pulse1)
+# =============================================================================
+#
+# phrase_a: the main 16-step theme in G major. Ascending phrase, buoyant feel.
+pat phrase_a    = G5 . B5 . D6 D6 B5 G5 A5 B5 . D6 B5 A5 G5 .
+
+# phrase_b: answer phrase — descends back after soaring up, resolves on G5.
+pat phrase_b    = E6 . D6 B5 A5 G5 A5 B5 C6 . B5 A5 G5 . . .
+
+# phrase_c: ascending portamento run — builds tension into the bridge.
+#           Each step slides from the previous pitch for a legato feel.
+pat phrase_c    = G4:2 A4<slide>:2 B4<slide>:2 D5<slide>:2 E5<slide>:2 G5<slide>:2 A5<slide>:2 B5<wobble>:2
+
+# phrase_d: bridge — four long notes with vibrato. Dramatic, slower pacing.
+pat phrase_d    = D6<wobble>:4 B5<wobble>:4 A5<wobble>:4 G5<wobble>:4
+
+# phrase_riser: one-bar pitch riser — the note bends up a full octave, launching
+#               into the final phrase repeat. Signals the turnaround.
+#               melody_hold keeps the pulse at full level so the rise stays audible.
+pat phrase_riser = inst(melody_hold,2) G4<riser>:8 D5<faller>:8
+
+# phrase_fill: arpeggiated major chord walk upward — quick energetic fill.
+pat phrase_fill = G5<majorArp>:4 A5<majorArp>:4 B5<majorArp>:4 D6<majorArp>:4
+
+# phrase_end: shimmer on the peak note, then dive and land on the tonic.
+pat phrase_end  = D6<shimmer>:4 B5<shimmer>:4 G5<shimmer>:4 . . . .
+
+# =============================================================================
+# HARMONY PATTERNS (Pulse2)
+# =============================================================================
+#
+# Long arpeggiated chords underpin the melody with harmonic colour.
+# harm_a: G major — tonic chord block.
+pat harm_a      = G4<majorArp>:4 B4<majorArp>:4 D5<majorArp>:4 G4<majorArp>:4
+
+# harm_b: vi–IV–V walk — Em → Am → D7 → G. Classic RPG progression.
+pat harm_b      = E4<minorArp>:4 A4<majorArp>:4 D4<domArp>:4 G4<majorArp>:4
+
+# harm_c: portamento counter-line in parallel with phrase_c (bridge build-up).
+pat harm_c      = G4<slide>:2 A4<slide>:2 B4<slide>:4 D5<slide>:4 E5<wobble>:4
+
+# harm_fill: quick chord swap — matches the melody fill with chord tones.
+pat harm_fill   = D5<majorArp>:4 G4<majorArp>:4 B4<minorArp>:4 A4<domArp>:4
+
+# harm_riser: long rising arpeggio over the riser bar.
+pat harm_riser  = G3<majorArp>:16
+
+# =============================================================================
+# BASS PATTERNS (Wave)
+# =============================================================================
+#
+# Walking bass in G major. Wavekick accents beats 1 and 3 only — beats 2 and 4
+# are left clear for the noise snare so the two don't stack and smear the groove.
+# Fills and arpeggio patterns keep the bass clean — no kick there.
+# 16 steps: 1 e & a | 2 e & a | 3 e & a | 4 e & a
+pat bass_a      = wavekick . D3 . . . B2 . wavekick . D3 G3 . . B2 .
+pat bass_b      = wavekick . G3 . . . C3 . wavekick . A3 . . . D3 .
+pat bass_arp    = inst bass1 G2:4 C3:4 D3:4 G2:4
+pat bass_fill   = inst bass1 G2:2 A2<slowSlide>:2 B2<slowSlide>:2 C3<slowSlide>:2 D3<slowSlide>:2 G3<slowSlide>:2 D3<slowSlide>:2 G2:2
+
+# =============================================================================
+# DRUM PATTERNS (Noise)
+# =============================================================================
+#
+# Snare locked to beats 2 and 4. Theme grooves use a single kick on beat 1 so the
+# downbeat stays clear under the dense melody 16ths; denser noise kicks only appear
+# in drums_anchor when the wave channel is busy with fills/arps.
+# 16 steps: 1 e & a | 2 e & a | 3 e & a | 4 e & a
+
+# drums_a: kick on 1, hats on off-beat 8ths, snare on beats 2 and 4.
+pat drums_a     = kick . hat . snare . hat . . . hat . snare . hat .
+
+# drums_b: busier hats, but keep snare locked to beats 2 and 4 (still one kick on 1).
+pat drums_b     = kick hat hat . snare . hat . . hat hat . snare . hat .
+
+# drums_anchor: used when the wave channel is busy with bass fills/arps, so
+# percussion keeps clear downbeats (1+3) without relying on wavekick.
+pat drums_anchor = kick . hat . snare . hat . kick . hat . snare . hat .
+
+# =============================================================================
+# SEQUENCES
+# =============================================================================
+#
+# Bars  1– 4 : Theme A (×2)   — main phrase + answer in G major
+# Bars  5– 6 : Build          — ascending portamento run + vibrato bridge phrase
+# Bars  7– 9 : Turnaround     — pitch-riser, arpeggiated fill, shimmer dive
+# Bars 10–13 : A reprise (×2) — theme returns to close
+
+# =============================================================================
+# CHANNELS
+# =============================================================================
+
+# --- Section 1: A section — main theme (Bars 1–4) ---
+
+section theme {
+  mel = phrase_a phrase_b phrase_a phrase_b
+  harm = harm_a harm_b harm_a harm_b
+  bass = bass_a bass_b bass_a bass_b
+  perc = drums_a drums_b drums_a drums_b
+}
+
+# --- Section 2: Build — bridge with vibrato (Bars 5–6) ---
+
+section build {
+  mel = phrase_c phrase_d
+  harm = harm_c harm_fill
+  bass = bass_fill bass_arp
+  perc = drums_anchor drums_anchor
+}
+
+# --- Section 3: Turnaround — riser, fill and dive (Bars 7–8) ---
+
+section turn {
+  mel = phrase_riser phrase_fill phrase_end
+  harm = harm_riser harm_fill harm_b
+  bass = bass_arp bass_fill bass_b
+  perc = drums_anchor drums_b drums_anchor
+}
+
+# --- Section 4: A reprise — theme returns (Bars 9–12) ---
+
+section reprise {
+  mel = phrase_a phrase_b phrase_a phrase_b
+  harm = harm_a harm_b harm_a harm_b
+  bass = bass_a bass_b bass_a bass_b
+  perc = drums_a drums_b drums_a drums_b
+}
+
+form main = theme > build > turn > reprise
+
+channel auto form main inst=melody|harmony|bass2|snare
+
+play auto

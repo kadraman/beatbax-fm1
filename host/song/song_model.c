@@ -65,6 +65,9 @@ void bax_song_free(bax_song_t *song) {
             if (song->patterns[i].tokens) {
                 free(song->patterns[i].tokens);
             }
+            if (song->patterns[i].rhs) {
+                free(song->patterns[i].rhs);
+            }
         }
         free(song->patterns);
         song->patterns = NULL;
@@ -84,18 +87,50 @@ void bax_song_free(bax_song_t *song) {
     song->sequence_count = 0;
     song->sequence_capacity = 0;
 
-    for (int i = 0; i < BAX_MAX_CHANNELS; i++) {
-        if (song->channels[i].seq_names) {
-            for (size_t j = 0; j < song->channels[i].seq_count; j++) {
-                if (song->channels[i].seq_names[j]) {
-                    free(song->channels[i].seq_names[j]);
+    if (song->sections) {
+        for (size_t i = 0; i < song->section_count; i++) {
+            for (size_t p = 0; p < song->sections[i].part_count; p++) {
+                if (song->sections[i].parts[p].patterns) {
+                    for (size_t k = 0; k < song->sections[i].parts[p].pattern_count; k++) {
+                        free(song->sections[i].parts[p].patterns[k]);
+                    }
+                    free(song->sections[i].parts[p].patterns);
                 }
             }
-            free(song->channels[i].seq_names);
-            song->channels[i].seq_names = NULL;
         }
-        song->channels[i].seq_count = 0;
-        song->channels[i].seq_capacity = 0;
+        free(song->sections);
+        song->sections = NULL;
+    }
+    song->section_count = 0;
+    song->section_capacity = 0;
+
+    if (song->forms) {
+        for (size_t i = 0; i < song->form_count; i++) {
+            if (song->forms[i].section_names) {
+                for (size_t k = 0; k < song->forms[i].section_count; k++) {
+                    free(song->forms[i].section_names[k]);
+                }
+                free(song->forms[i].section_names);
+            }
+        }
+        free(song->forms);
+        song->forms = NULL;
+    }
+    song->form_count = 0;
+    song->form_capacity = 0;
+
+    for (int i = 0; i < BAX_MAX_CHANNELS; i++) {
+        if (song->channels[i].ref_names) {
+            for (size_t j = 0; j < song->channels[i].ref_count; j++) {
+                if (song->channels[i].ref_names[j]) {
+                    free(song->channels[i].ref_names[j]);
+                }
+            }
+            free(song->channels[i].ref_names);
+            song->channels[i].ref_names = NULL;
+        }
+        song->channels[i].ref_count = 0;
+        song->channels[i].ref_capacity = 0;
     }
 }
 
@@ -119,6 +154,8 @@ bax_instrument_t *bax_song_add_instrument(bax_song_t *song, const char *name, ba
     inst->gm = -1;
     inst->vol_env.loop_point = -1;
     inst->pitch_env.loop_point = -1;
+    inst->duty_env.loop_point = -1;
+    inst->arp_env.loop_point = -1;
     return inst;
 }
 
@@ -236,6 +273,60 @@ const bax_sequence_t *bax_song_find_sequence(const bax_song_t *song, const char 
     for (size_t i = 0; i < song->sequence_count; i++) {
         if (strcmp(song->sequences[i].name, name) == 0) {
             return &song->sequences[i];
+        }
+    }
+    return NULL;
+}
+
+bax_section_t *bax_song_add_section(bax_song_t *song, const char *name) {
+    if (!song || !name) return NULL;
+
+    if (song->section_count >= song->section_capacity) {
+        size_t new_cap = song->section_capacity == 0 ? 8 : song->section_capacity * 2;
+        bax_section_t *new_arr = (bax_section_t *)realloc(song->sections, new_cap * sizeof(bax_section_t));
+        if (!new_arr) return NULL;
+        song->sections = new_arr;
+        song->section_capacity = new_cap;
+    }
+
+    bax_section_t *sec = &song->sections[song->section_count++];
+    memset(sec, 0, sizeof(bax_section_t));
+    strncpy(sec->name, name, sizeof(sec->name) - 1);
+    return sec;
+}
+
+bax_form_t *bax_song_add_form(bax_song_t *song, const char *name) {
+    if (!song || !name) return NULL;
+
+    if (song->form_count >= song->form_capacity) {
+        size_t new_cap = song->form_capacity == 0 ? 4 : song->form_capacity * 2;
+        bax_form_t *new_arr = (bax_form_t *)realloc(song->forms, new_cap * sizeof(bax_form_t));
+        if (!new_arr) return NULL;
+        song->forms = new_arr;
+        song->form_capacity = new_cap;
+    }
+
+    bax_form_t *frm = &song->forms[song->form_count++];
+    memset(frm, 0, sizeof(bax_form_t));
+    strncpy(frm->name, name, sizeof(frm->name) - 1);
+    return frm;
+}
+
+const bax_section_t *bax_song_find_section(const bax_song_t *song, const char *name) {
+    if (!song || !name) return NULL;
+    for (size_t i = 0; i < song->section_count; i++) {
+        if (strcmp(song->sections[i].name, name) == 0) {
+            return &song->sections[i];
+        }
+    }
+    return NULL;
+}
+
+const bax_form_t *bax_song_find_form(const bax_song_t *song, const char *name) {
+    if (!song || !name) return NULL;
+    for (size_t i = 0; i < song->form_count; i++) {
+        if (strcmp(song->forms[i].name, name) == 0) {
+            return &song->forms[i];
         }
     }
     return NULL;

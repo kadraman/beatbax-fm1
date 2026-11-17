@@ -1,0 +1,72 @@
+## Game Boy Tremolo (trem) effect demo
+## Amplitude modulation (volume LFO) — rhythmically varies volume for a quivering shimmer effect
+## Play: node bin/beatbax play songs/gameboy/effects/gb_tremolo_demo.bax
+##
+## Syntax: trem:<depth>,<rate>[,<waveform>[,<duration>[,<delayRows>]]]
+##   - depth     : modulation depth, 0–15 (higher = more pronounced volume variation)
+##   - rate      : LFO speed in Hz (higher = faster oscillation)
+##   - waveform  : LFO shape — sine (default), triangle, square, saw
+##   - duration  : rows the effect is active (optional; defaults to full note length)
+##   - delayRows : rows to wait before the LFO starts (optional; 0 = immediate, default = 0)
+##
+## Export support:
+##   JSON  : yes — full fidelity
+##   MIDI  : approximated — encoded as CC7 volume automation
+##   UGE   : no  — not playable in hUGETracker (exported as metadata comment only; 7xx is note delay)
+##   Audio : yes — WebAudio gain LFO and PCM renderer
+
+chip gameboy
+bpm 128
+
+## Instruments
+inst lead type=pulse1 duty=50 env=12,flat
+inst bass type=pulse2 duty=25 env=10,flat
+inst pad type=pulse1 duty=50 env=15,flat
+inst wave1 type=wave wave=[8,9,10,12,13,14,14,15,15,15,14,14,13,12,10,9,8,6,5,3,2,1,1,0,0,0,1,1,2,3,5,6] volume=100
+
+## Named tremolo presets — all include a 1-step onset delay for authentic GB feel
+effect shimmer   = trem:6,4,sine,0,1
+effect pulse     = trem:10,8,square,0,1
+effect slow_wave = trem:4,2,triangle,0,2
+
+## Patterns demonstrating tremolo parameters
+
+## Basic tremolo with different depths — 1-step delay onset on each note
+pat depth_demo = C4<trem:3,6,sine,0,1>:4 E4<trem:8,6,sine,0,1>:4 G4<trem:12,6,sine,0,1>:4 C5<trem:15,6,sine,0,1>:4
+
+## Different tremolo rates (speed) — 1-step delay
+pat rate_demo = C4<trem:8,2,sine,0,1>:4 E4<trem:8,6,sine,0,1>:4 G4<trem:8,12,sine,0,1>:4 C5<trem:8,20,sine,0,1>:4
+
+## Different waveform shapes — 1-step delay
+pat waveform_demo = C4<trem:8,6,sine,0,1>:4 E4<trem:8,6,triangle,0,1>:4 G4<trem:8,6,square,0,1>:4 C5<trem:8,6,saw,0,1>:4
+
+## Named preset usage
+pat preset_demo = C4<shimmer>:4 E4<pulse>:4 G4<slow_wave>:4 C5<shimmer>:4
+pat preset_demo2 = C4<shimmer>:4 E4<pulse>:4 G4<slow_wave>:4 C4<shimmer>:4
+
+## Combining tremolo with other effects — delay untouched (combo context already introduces natural lag)
+pat combo_demo = C4<vib:3,6,trem:6,4>:4 E4<port:12,trem:8,6>:4 G4<trem:8,6,volSlide:+3>:4 C5<pan:-1.0,trem:10,8>:4
+
+## Sustained notes with tremolo for atmospheric pads — 2-step delay lets the attack breathe first
+pat pad_sustain = C3<trem:6,3,sine,0,2>:16 . . G3<trem:8,4,triangle,0,2>:16 . .
+
+## Bass with tremolo — 1-step delay
+pat bass_trem = C2<trem:10,8,sine,0,1>:2 . C2<trem:10,8,sine,0,1>:2 . F2<trem:10,8,sine,0,1>:2 . F2<trem:10,8,sine,0,1>:2 .
+
+## Rest pattern to match lead_seq duration
+pat rest_long = . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+## Sequences
+seq lead_seq = depth_demo rate_demo waveform_demo preset_demo
+seq lead_seq2 = depth_demo rate_demo waveform_demo preset_demo2
+
+seq pad_seq = pad_sustain*2
+seq bass_seq = bass_trem*5
+seq rest_seq = rest_long*4
+
+## Channels - demonstrates tremolo on different channels
+channel 1 => inst lead seq lead_seq lead_seq2
+channel 2 => inst pad seq rest_seq pad_seq
+channel 3 => inst bass seq rest_seq bass_seq
+
+play

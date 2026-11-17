@@ -62,6 +62,14 @@ static const char *voice_type_str(bax_voice_type_t type) {
     }
 }
 
+static const char *env_direction_str(bax_env_direction_t dir) {
+    switch (dir) {
+        case BAX_ENV_DIR_UP: return "up";
+        case BAX_ENV_DIR_FLAT: return "flat";
+        default: return "down";
+    }
+}
+
 static void write_macro_array(write_ctx_t *ctx, const char *key, const bax_macro_env_t *m) {
     if (m->count == 0) return;
     w_printf(ctx, " %s=[", key);
@@ -96,7 +104,7 @@ static void write_instrument(write_ctx_t *ctx, const bax_instrument_t *inst) {
             }
         }
         if (inst->env.present) {
-            const char *dir = (inst->env.direction == BAX_ENV_DIR_UP) ? "up" : "down";
+            const char *dir = env_direction_str(inst->env.direction);
             if (inst->has_env_object_syntax) {
                 w_printf(ctx, " env={\"level\":%d,\"direction\":\"%s\",\"period\":%d}",
                          inst->env.level, dir, inst->env.period);
@@ -121,7 +129,7 @@ static void write_instrument(write_ctx_t *ctx, const bax_instrument_t *inst) {
             w_printf(ctx, " gb:width=%d", inst->noise_width);
         }
         if (inst->env.present) {
-            const char *dir = (inst->env.direction == BAX_ENV_DIR_UP) ? "up" : "down";
+            const char *dir = env_direction_str(inst->env.direction);
             if (inst->has_env_object_syntax) {
                 w_printf(ctx, " env={\"level\":%d,\"direction\":\"%s\",\"period\":%d}",
                          inst->env.level, dir, inst->env.period);
@@ -129,12 +137,13 @@ static void write_instrument(write_ctx_t *ctx, const bax_instrument_t *inst) {
                 w_printf(ctx, " env=gb:%d,%s,%d", inst->env.level, dir, inst->env.period);
             }
         }
-        if (inst->uge_note[0] != '\0') {
-            w_printf(ctx, " uge_note=%s", inst->uge_note);
-        }
-        if (inst->note[0] != '\0') {
-            w_printf(ctx, " note=%s", inst->note);
-        }
+    }
+
+    if (inst->uge_note[0] != '\0') {
+        w_printf(ctx, " uge_note=%s", inst->uge_note);
+    }
+    if (inst->note[0] != '\0') {
+        w_printf(ctx, " note=%s", inst->note);
     }
 
     if (inst->length >= 0) {
@@ -149,14 +158,28 @@ static void write_instrument(write_ctx_t *ctx, const bax_instrument_t *inst) {
     if (inst->subpat[0] != '\0') {
         w_printf(ctx, " subpat=%s", inst->subpat);
     }
+    if (inst->pan[0] != '\0') {
+        w_printf(ctx, " %span=%s", inst->pan_gb ? "gb:" : "", inst->pan);
+    }
 
     write_macro_array(ctx, "vol_env", &inst->vol_env);
     write_macro_array(ctx, "pitch_env", &inst->pitch_env);
+    write_macro_array(ctx, "duty_env", &inst->duty_env);
+    write_macro_array(ctx, "arp_env", &inst->arp_env);
 
     w_printf(ctx, "\n");
 }
 
 static void write_effect(write_ctx_t *ctx, const bax_effect_t *eff) {
+    /* The effect RHS is opaque text in BeatBax (parsed downstream at render
+     * time), so emit the preserved raw expression verbatim. This keeps arp:4,7,10,
+     * vib:3,5,sine,3 and bend:... byte-stable without inventing a sub-grammar. */
+    if (eff->raw_expr[0] != '\0') {
+        w_printf(ctx, "effect %s = %s\n", eff->name, eff->raw_expr);
+        return;
+    }
+
+    /* Fallback for programmatically-built songs without a raw expression. */
     w_printf(ctx, "effect %s = ", eff->name);
     if (eff->type == BAX_EFFECT_VIBRATO) {
         if (eff->params.vib.waveform[0] != '\0') {
@@ -165,9 +188,15 @@ static void write_effect(write_ctx_t *ctx, const bax_effect_t *eff) {
             w_printf(ctx, "vib:%d,%d\n", eff->params.vib.speed, eff->params.vib.depth);
         }
     } else if (eff->type == BAX_EFFECT_ARPEGGIO) {
-        w_printf(ctx, "arp:%d,%d\n", eff->params.arp.semi1, eff->params.arp.semi2);
+        if (eff->params.arp.semi3 != 0) {
+            w_printf(ctx, "arp:%d,%d,%d\n", eff->params.arp.semi1, eff->params.arp.semi2, eff->params.arp.semi3);
+        } else {
+            w_printf(ctx, "arp:%d,%d\n", eff->params.arp.semi1, eff->params.arp.semi2);
+        }
     } else if (eff->type == BAX_EFFECT_PORTAMENTO) {
         w_printf(ctx, "port:%d\n", eff->params.port.speed);
+    } else {
+        w_printf(ctx, "\n");
     }
 }
 
@@ -180,6 +209,14 @@ static void write_subpattern(write_ctx_t *ctx, const bax_subpat_t *sub) {
 
 static void write_pattern(write_ctx_t *ctx, const bax_pattern_t *pat) {
     w_printf(ctx, "pat %s =", pat->name);
+
+    /* Preserve the raw RHS verbatim when present (authoritative for group
+     * repeats and other constructs the flat token list can't represent). */
+    if (pat->rhs && pat->rhs[0] != '\0') {
+        w_printf(ctx, " %s\n", pat->rhs);
+        return;
+    }
+
     for (size_t i = 0; i < pat->token_count; i++) {
         const bax_pat_token_t *tok = &pat->tokens[i];
         w_printf(ctx, " ");
@@ -209,6 +246,10 @@ static void write_sequence(write_ctx_t *ctx, const bax_sequence_t *seq) {
     w_printf(ctx, "seq %s =", seq->name);
     for (size_t i = 0; i < seq->item_count; i++) {
         const bax_seq_item_t *item = &seq->items[i];
+        if (item->raw[0] != '\0') {
+            w_printf(ctx, " %s", item->raw);
+            continue;
+        }
         w_printf(ctx, " %s", item->pattern_name);
         if (item->inst_override[0] != '\0') {
             w_printf(ctx, ":inst(%s)", item->inst_override);
@@ -224,21 +265,60 @@ static void write_sequence(write_ctx_t *ctx, const bax_sequence_t *seq) {
 }
 
 static void write_channel(write_ctx_t *ctx, const bax_channel_t *ch) {
-    if (ch->seq_count == 0 && ch->default_inst[0] == '\0') {
+    bool has_inst = ch->default_inst[0] != '\0';
+    bool has_refs = ch->ref_count > 0;
+    bool has_role = ch->role[0] != '\0';
+    if (!has_inst && !has_refs && !has_role) {
         return;
     }
     w_printf(ctx, "channel %d =>", ch->channel_num);
-    if (ch->default_inst[0] != '\0') {
+    if (has_inst) {
         w_printf(ctx, " inst %s", ch->default_inst);
     }
-    if (ch->seq_count > 0) {
-        w_printf(ctx, " seq");
-        for (size_t i = 0; i < ch->seq_count; i++) {
-            w_printf(ctx, " %s", ch->seq_names[i]);
+    if (has_role) {
+        w_printf(ctx, " role %s", ch->role);
+        if (ch->form_ref[0] != '\0') {
+            w_printf(ctx, " form %s", ch->form_ref);
         }
     }
-    if (ch->lock_scale) {
-        w_printf(ctx, " lock=scale");
+    if (has_refs) {
+        w_printf(ctx, " %s", ch->ref_is_pat ? "pat" : "seq");
+        for (size_t i = 0; i < ch->ref_count; i++) {
+            w_printf(ctx, " %s", ch->ref_names[i]);
+        }
+    }
+    if (ch->lock_mode[0] != '\0') {
+        w_printf(ctx, " lock=%s", ch->lock_mode);
+    }
+    w_printf(ctx, "\n");
+}
+
+static void write_section(write_ctx_t *ctx, const bax_section_t *sec) {
+    w_printf(ctx, "section %s {\n", sec->name);
+    for (size_t p = 0; p < sec->part_count; p++) {
+        const bax_section_part_t *part = &sec->parts[p];
+        w_printf(ctx, "  %s =", part->part_name);
+        for (size_t k = 0; k < part->pattern_count; k++) {
+            w_printf(ctx, " %s", part->patterns[k]);
+        }
+        w_printf(ctx, "\n");
+    }
+    w_printf(ctx, "}\n");
+}
+
+static void write_form(write_ctx_t *ctx, const bax_form_t *frm) {
+    w_printf(ctx, "form %s =", frm->name);
+    for (size_t i = 0; i < frm->section_count; i++) {
+        if (i > 0) w_printf(ctx, ",");
+        w_printf(ctx, " %s", frm->section_names[i]);
+    }
+    w_printf(ctx, "\n");
+}
+
+static void write_channel_auto(write_ctx_t *ctx, const bax_song_t *song) {
+    w_printf(ctx, "channel auto form %s", song->auto_form_name);
+    if (song->auto_form_inst[0] != '\0') {
+        w_printf(ctx, " inst=%s", song->auto_form_inst);
     }
     w_printf(ctx, "\n");
 }
@@ -314,16 +394,40 @@ static bool write_internal(const bax_song_t *song, write_ctx_t *ctx) {
         w_printf(ctx, "\n");
     }
 
+    /* Sections */
+    if (song->section_count > 0) {
+        for (size_t i = 0; i < song->section_count; i++) {
+            write_section(ctx, &song->sections[i]);
+            w_printf(ctx, "\n");
+        }
+    }
+
+    /* Forms */
+    if (song->form_count > 0) {
+        for (size_t i = 0; i < song->form_count; i++) {
+            write_form(ctx, &song->forms[i]);
+        }
+        w_printf(ctx, "\n");
+    }
+
     /* Channels */
     for (int i = 0; i < BAX_MAX_CHANNELS; i++) {
         write_channel(ctx, &song->channels[i]);
+    }
+
+    /* Channel auto form routing */
+    if (song->channel_auto_form) {
+        write_channel_auto(ctx, song);
     }
     w_printf(ctx, "\n");
 
     /* Play statement */
     if (song->has_play) {
-        if (song->play_auto) {
-            w_printf(ctx, "play auto\n");
+        if (song->play_auto || song->play_repeat) {
+            w_printf(ctx, "play");
+            if (song->play_auto) w_printf(ctx, " auto");
+            if (song->play_repeat) w_printf(ctx, " repeat");
+            w_printf(ctx, "\n");
         } else {
             w_printf(ctx, "play\n");
         }

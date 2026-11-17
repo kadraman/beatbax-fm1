@@ -129,7 +129,13 @@ static void test_unsupported_refusals(void) {
     printf("  PASS: Refused out-of-range channel number (construct: '%s')\n", err.construct);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc > 1) {
+        printf("Testing custom song: %s\n", argv[1]);
+        test_fixture_roundtrip(argv[1], "custom.canon.bax", "custom.canon2.bax");
+        return 0;
+    }
+
     printf("Running BeatBax FM-1 Song Model Tests...\n\n");
 
     test_fixture_roundtrip("songs/gameboy/tutorial_groove.bax",
@@ -143,6 +149,10 @@ int main(void) {
     test_fixture_roundtrip("songs/gameboy/gb_uge_note_demo.bax",
                            "songs/gameboy/gb_uge_note_demo.canon.bax",
                            "songs/gameboy/gb_uge_note_demo.canon2.bax");
+
+    test_fixture_roundtrip("songs/gameboy/grassland_dash.bax",
+                           "songs/gameboy/grassland_dash.canon.bax",
+                           "songs/gameboy/grassland_dash.canon2.bax");
 
     test_unsupported_refusals();
 

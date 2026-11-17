@@ -11,6 +11,7 @@ dist/
 *.map
 *.dis
 *.canon*.bax
+host/tests/test_roundtrip
 
 # Toolchains / deps
 .deps/
