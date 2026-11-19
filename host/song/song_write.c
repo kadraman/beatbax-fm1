@@ -324,21 +324,11 @@ static void write_channel_auto(write_ctx_t *ctx, const bax_song_t *song) {
 }
 
 /* Serialize a metadata string value into a BeatBax string literal, escaping
- * quotes/backslashes and using the triple-quoted form for multi-line values. */
+ * quotes, backslashes, and control characters (including newlines) so any
+ * value — even one containing a newline and three consecutive double quotes —
+ * survives a round-trip. The triple-quoted form is deliberately avoided here
+ * because it cannot represent an embedded `"""` delimiter. */
 static void write_metadata_string(write_ctx_t *ctx, const char *s) {
-    bool multiline = false;
-    for (const char *p = s; *p; p++) {
-        if (*p == '\n' || *p == '\r') {
-            multiline = true;
-            break;
-        }
-    }
-
-    if (multiline) {
-        w_printf(ctx, "\"\"\"%s\"\"\"", s);
-        return;
-    }
-
     w_printf(ctx, "\"");
     for (const char *p = s; *p; p++) {
         if (*p == '"' || *p == '\\') {

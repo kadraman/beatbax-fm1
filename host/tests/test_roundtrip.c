@@ -357,6 +357,40 @@ static void test_metadata_escaping(void) {
     printf("  PASS: metadata escaping round-trip\n");
 }
 
+static void test_metadata_triple_quote_escape(void) {
+    printf("Testing metadata containing a newline and triple quotes...\n");
+
+    const char *src =
+        "chip gameboy\n"
+        "song description \"line one\\n\\\"\\\"\\\"quote\\\"\\\"\\\"\\nline two\"\n";
+    bax_song_t song;
+    bax_error_t err;
+    assert(bax_song_parse(src, strlen(src), &song, &err));
+
+    const char *expected = "line one\n\"\"\"quote\"\"\"\nline two";
+    assert(strcmp(song.description, expected) == 0);
+
+    char *out1 = NULL;
+    size_t len1 = 0;
+    assert(bax_song_write_alloc(&song, &out1, &len1));
+
+    bax_song_t song2;
+    assert(bax_song_parse(out1, len1, &song2, &err));
+    assert(strcmp(song2.description, expected) == 0);
+
+    char *out2 = NULL;
+    size_t len2 = 0;
+    assert(bax_song_write_alloc(&song2, &out2, &len2));
+    assert(len1 == len2 && strcmp(out1, out2) == 0);
+
+    bax_song_free(&song);
+    bax_song_free(&song2);
+    free(out1);
+    free(out2);
+
+    printf("  PASS: metadata with newline and triple quotes\n");
+}
+
 int main(int argc, char **argv) {
     if (argc > 1) {
         printf("Testing custom song: %s\n", argv[1]);
@@ -391,6 +425,7 @@ int main(int argc, char **argv) {
     test_seq_token_capacity();
     test_channel_auto_option();
     test_metadata_escaping();
+    test_metadata_triple_quote_escape();
 
     printf("\nAll unit tests passed successfully!\n");
     return 0;
