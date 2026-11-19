@@ -77,6 +77,12 @@ test-render:
 	$(CC) $(CFLAGS) -Ihost/render/gameboy \
 		host/song/song_model.c host/song/song_parse.c \
 		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_render.c host/render/gameboy/gb_song_render.c \
+		host/tests/render/test_song_render.c -o host/tests/render/test_song_render
+	./host/tests/render/test_song_render
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
 		host/render/gameboy/gb_render.c \
 		host/tests/render/test_render_silence.c -o host/tests/render/test_render_silence
 	./host/tests/render/test_render_silence
