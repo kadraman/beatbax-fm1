@@ -168,3 +168,20 @@ uint32_t gb_noise_lfsr_hz(uint32_t shift, uint32_t divisor) {
     uint32_t den = ratio << (shift & 0x7u);
     return (GB_CLOCK + den / 2u) / den; /* rounded */
 }
+
+uint64_t gb_noise_lfsr_inc(uint32_t shift, uint32_t divisor, uint32_t sample_rate) {
+    if (sample_rate == 0) {
+        return 0;
+    }
+    uint64_t num;
+    uint64_t den;
+    if (divisor == 0) {
+        /* ratio = 0.5: lfsrHz = 2*GB_CLOCK / 2^shift. */
+        num = (uint64_t)GB_CLOCK << 33; /* 2 * GB_CLOCK * 2^32 */
+        den = ((uint64_t)1 << (shift & 0x7u)) * (uint64_t)sample_rate;
+    } else {
+        num = (uint64_t)GB_CLOCK << 32;
+        den = ((uint64_t)(divisor & 0x7u) << (4u + (shift & 0x7u))) * (uint64_t)sample_rate;
+    }
+    return (num + den / 2u) / den;
+}

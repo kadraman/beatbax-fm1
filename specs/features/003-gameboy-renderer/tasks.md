@@ -15,11 +15,18 @@
 - [x] T010 [US1] Implement pulse1/pulse2 cores (duty, envelope) in `host/render/gameboy/`
 - [x] T011 [US1] Implement wave channel (wave table + volume) in `host/render/gameboy/`
 - [x] T012 [US1] Implement noise channel in `host/render/gameboy/`
-- [ ] T013 [US1] Implement scheduler/expansion tick consuming song model
-- [ ] T014 [US1] Implement supported Game Boy effects from the frozen surface list
-- [ ] T015 [US1] Unit tests under `host/tests/render/` per voice
+- [x] T013 [US1] Implement scheduler/expansion tick consuming song model
+- [x] T014 [US1] Implement supported Game Boy effects from the frozen surface list
+- [x] T015 [US1] Unit tests under `host/tests/render/` per voice
 
 **Checkpoint**: fixtures produce non-silent WAV with all used channels.
+
+**Notes (this increment)**:
+- Effects implemented: `vib`, `arp`, `port` (named effects), `vol_env`/`pitch_env`/
+  `duty_env`/`arp_env` (software macros), and the pulse-1 NR10 frequency sweep.
+- Remaining Phase-1 scope (not covered by the three fixtures above): `bend`
+  effect, sections/forms/channel-auto routing, and pattern group/token repeats
+  `( … )*N` / `*N` — these are needed for `grassland_dash.bax`.
 
 ## Phase 2: User Story 2 — Compare to BeatBax CLI (P1)
 

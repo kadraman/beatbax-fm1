@@ -54,6 +54,12 @@ uint32_t gb_period_to_inc(uint32_t reg, uint32_t sample_rate);
  */
 uint32_t gb_period_to_freq_hz(uint32_t reg);
 
+/*
+ * Frequency (Hz) in Q16 fixed point for a period register
+ * (freq = 131072 / (2048 - reg)), clamped to the int32 range.
+ */
+int32_t gb_period_to_freq_q16(uint32_t reg);
+
 #ifdef __cplusplus
 }
 #endif

@@ -81,6 +81,13 @@ int gb_huge_note_to_index(const char *note_name);
 /* LFSR update rate (Hz) from NR43 shift/divisor code (rounds). */
 uint32_t gb_noise_lfsr_hz(uint32_t shift, uint32_t divisor);
 
+/*
+ * Exact LFSR phase increment (Q32, may exceed 2^32) for a sample rate, computed
+ * directly from shift/divisor to avoid integer-Hz rounding:
+ *   lfsrHz = GB_CLOCK / (ratio * 2^shift); inc = lfsrHz * 2^32 / sample_rate.
+ */
+uint64_t gb_noise_lfsr_inc(uint32_t shift, uint32_t divisor, uint32_t sample_rate);
+
 #ifdef __cplusplus
 }
 #endif

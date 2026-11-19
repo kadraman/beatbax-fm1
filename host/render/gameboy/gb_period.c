@@ -65,3 +65,13 @@ uint32_t gb_period_to_freq_hz(uint32_t reg) {
     uint32_t period = 2048u - r; /* 1..2048 */
     return (131072u + period / 2u) / period;
 }
+
+int32_t gb_period_to_freq_q16(uint32_t reg) {
+    uint32_t r = reg & 0x7FFu;
+    uint32_t period = 2048u - r; /* 1..2048 */
+    uint64_t q = ((uint64_t)131072u << 16) / period;
+    if (q > 0x7FFFFFFFull) {
+        q = 0x7FFFFFFFull;
+    }
+    return (int32_t)q;
+}

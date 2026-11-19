@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "gb_note_render.h"
 #include "gb_song_render.h"
 
 #include <stdio.h>
@@ -99,31 +100,6 @@ static int note_str_to_midi(const char *s) {
     }
     int octave = *p - '0';
     return (octave + 1) * 12 + ((semi % 12) + 12) % 12;
-}
-
-static void resolve_noise_clock(const bax_instrument_t *inst, uint32_t *shift, uint32_t *divisor) {
-    *shift = 4;   /* DEFAULT_NOISE_SHIFT */
-    *divisor = 3; /* DEFAULT_NOISE_DIVISOR */
-    if (inst->uge_note[0]) {
-        int idx = gb_huge_note_to_index(inst->uge_note);
-        if (idx >= 0) {
-            uint8_t poly = gb_noise_note_poly(idx);
-            *shift = (poly >> 4) & 7u;
-            *divisor = poly & 7u;
-        }
-    }
-}
-
-/* Tile the wave table (16 or 32 nibbles) to 32 and return the integer sum. */
-static void build_wave_table(const bax_instrument_t *inst, uint8_t table[32], int *sum) {
-    size_t count = inst->wave.count;
-    int s = 0;
-    for (int i = 0; i < 32; i++) {
-        uint8_t v = (count == 0) ? 0 : inst->wave.samples[i % count];
-        table[i] = v;
-        s += v;
-    }
-    *sum = s;
 }
 
 /*
@@ -232,50 +208,6 @@ static void expand_channel(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
     }
 }
 
-/* Render a note event into `dst` (mono, overwrites). */
-static void render_note(const gb_expand_ctx_t *ctx, gb_sample_t *dst, uint32_t len,
-                        const gb_ev_t *ev, const bax_instrument_t *inst,
-                        gb_phase_t *chan_phase) {
-    switch (inst->type) {
-        case BAX_VOICE_PULSE1:
-        case BAX_VOICE_PULSE2: {
-            uint32_t reg = gb_midi_to_period(ev->midi);
-            uint32_t inc = gb_period_to_inc(reg, ctx->sample_rate);
-            uint32_t duty_thr = gb_duty_threshold((uint32_t)(inst->duty * 10.0f + 0.5f));
-            uint8_t initial = inst->env.present ? inst->env.level : 15;
-            uint8_t period = inst->env.present ? inst->env.period : 0;
-            gb_env_dir_t dir = inst->env.present ? (gb_env_dir_t)inst->env.direction : GB_ENV_FLAT;
-            gb_render_pulse(dst, len, inc, duty_thr, chan_phase, initial, dir, period,
-                            ctx->sample_rate);
-            break;
-        }
-        case BAX_VOICE_WAVE: {
-            uint32_t reg = gb_midi_to_period(ev->midi);
-            uint32_t inc = gb_period_to_inc(reg, ctx->sample_rate);
-            uint8_t table[32];
-            int sum;
-            build_wave_table(inst, table, &sum);
-            int vol_div = gb_wave_volume_div(inst->wave_volume);
-            gb_render_wave(dst, len, inc, table, sum, vol_div, ctx->sample_rate);
-            break;
-        }
-        case BAX_VOICE_NOISE: {
-            uint32_t shift, divisor;
-            resolve_noise_clock(inst, &shift, &divisor);
-            uint32_t lfsr_hz = gb_noise_lfsr_hz(shift, divisor);
-            bool width7 = (inst->noise_width == 7);
-            uint8_t initial = inst->env.present ? inst->env.level : 15;
-            uint8_t period = inst->env.present ? inst->env.period : 0;
-            gb_env_dir_t dir = inst->env.present ? (gb_env_dir_t)inst->env.direction : GB_ENV_FLAT;
-            gb_render_noise(dst, len, lfsr_hz, width7, initial, dir, period,
-                            ctx->sample_rate);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
 bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
                          gb_sample_t **out_mono, size_t *out_len,
                          char *errbuf, size_t errbuf_len) {
@@ -298,7 +230,6 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
     ctx.sample_rate = sample_rate;
     ctx.bpm = bpm;
 
-    /* Expand every channel into an event list. */
     gb_ev_list_t lists[BAX_MAX_CHANNELS];
     memset(lists, 0, sizeof(lists));
 
@@ -309,7 +240,6 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
             continue;
         }
         expand_channel(&ctx, &lists[c], ch);
-        /* Track max extent via each event's end sample. */
         for (size_t i = 0; i < lists[c].count; i++) {
             uint64_t end_sample = (uint64_t)lists[c].items[i].start_sample +
                                   lists[c].items[i].len_samples;
@@ -329,10 +259,8 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
         return false;
     }
 
-    /* Add one step of tail so trailing envelope/release is not truncated. */
     size_t total = (size_t)max_step + step_to_sample(&ctx, 1);
     int32_t *mix = (int32_t *)calloc(total, sizeof(int32_t));
-    gb_sample_t *scratch = NULL;
     if (!mix) {
         for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
             free(lists[c].items);
@@ -346,12 +274,21 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
     uint32_t max_len = 0;
     for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
         for (size_t i = 0; i < lists[c].count; i++) {
-            if (lists[c].items[i].len_samples > max_len) {
-                max_len = lists[c].items[i].len_samples;
+            uint32_t l = lists[c].items[i].len_samples;
+            const bax_instrument_t *ni = bax_song_find_instrument(song, lists[c].items[i].inst);
+            if (ni && ni->type == BAX_VOICE_NOISE && ni->length > 0) {
+                int ll = ni->length > 63 ? 63 : ni->length;
+                uint32_t hw = (uint32_t)((uint64_t)(64 - ll) * sample_rate / 256u);
+                if (hw > l) {
+                    l = hw;
+                }
+            }
+            if (l > max_len) {
+                max_len = l;
             }
         }
     }
-    scratch = (gb_sample_t *)malloc((size_t)max_len * sizeof(gb_sample_t));
+    gb_sample_t *scratch = (gb_sample_t *)malloc((size_t)max_len * sizeof(gb_sample_t));
     if (max_len > 0 && !scratch) {
         free(mix);
         for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
@@ -363,10 +300,9 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
         return false;
     }
 
-    gb_phase_t chan_phase[BAX_MAX_CHANNELS];
-    memset(chan_phase, 0, sizeof(chan_phase));
+    gb_channel_state_t state;
+    gb_channel_state_init(&state);
 
-    /* Render every event and accumulate (mix) into `mix`. */
     for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
         for (size_t i = 0; i < lists[c].count; i++) {
             const gb_ev_t *ev = &lists[c].items[i];
@@ -382,20 +318,32 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
                 continue;
             }
 
-            int midi = ev->midi;
-            if (ev->kind == GB_EV_NAMED) {
-                /* Named instrument hit: use the instrument default note. */
-                if (inst->note[0]) {
-                    midi = note_str_to_midi(inst->note);
-                } else {
-                    midi = -1;
+            /* Noise hardware length extends the render window (NR41). */
+            if (inst->type == BAX_VOICE_NOISE && inst->length > 0) {
+                int l = inst->length > 63 ? 63 : inst->length;
+                uint32_t hw = (uint32_t)((uint64_t)(64 - l) * sample_rate / 256u);
+                if (hw > len) {
+                    len = hw;
+                    if (ev->start_sample + len > total) {
+                        len = (uint32_t)(total - ev->start_sample);
+                    }
                 }
             }
 
-            gb_ev_t resolved = *ev;
-            resolved.midi = midi;
+            int midi = ev->midi;
+            if (ev->kind == GB_EV_NAMED) {
+                midi = note_str_to_midi(inst->note);
+                if (midi < 0 && inst->type != BAX_VOICE_NOISE) {
+                    /* Melodic named hit with no default note -> nothing to play. */
+                    continue;
+                }
+                if (midi < 0) {
+                    midi = 0; /* noise ignores pitch; uge_note drives its clock */
+                }
+            }
 
-            render_note(&ctx, scratch, len, &resolved, inst, &chan_phase[c]);
+            gb_render_note_full(scratch, len, song, midi, inst, ev->effect,
+                                sample_rate, &state, c);
 
             for (uint32_t s = 0; s < len; s++) {
                 int32_t v = mix[ev->start_sample + s] + scratch[s];
@@ -426,6 +374,22 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
         out[s] = (gb_sample_t)mix[s];
     }
     free(mix);
+
+    /* Peak-limit to 0.95 (PLAYBACK_PEAK_CEILING), matching BeatBax's
+     * normalizeBuffer(buffer, false): scale down only if clipping. */
+    int peak = 0;
+    for (size_t s = 0; s < total; s++) {
+        int a = out[s] < 0 ? -out[s] : out[s];
+        if (a > peak) {
+            peak = a;
+        }
+    }
+    if (peak > 31130) {
+        int32_t scale = (int32_t)(((uint64_t)31130u << 15) / (uint64_t)peak);
+        for (size_t s = 0; s < total; s++) {
+            out[s] = (gb_sample_t)(((int32_t)out[s] * scale) >> 15);
+        }
+    }
 
     *out_mono = out;
     *out_len = total;

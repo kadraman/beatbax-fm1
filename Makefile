@@ -29,7 +29,7 @@ export AC79_SDK        ?= $(HOME)/.jieli/ac79-sdk
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all clean build package test test-host test-unit test-coverage test-render
+.PHONY: help all clean build package test test-host test-unit test-coverage test-render render-bax
 
 help:
 	@echo "BeatBax FM-1 (firmware & host tooling)"
@@ -77,7 +77,8 @@ test-render:
 	$(CC) $(CFLAGS) -Ihost/render/gameboy \
 		host/song/song_model.c host/song/song_parse.c \
 		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
-		host/render/gameboy/gb_render.c host/render/gameboy/gb_song_render.c \
+		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_song_render.c \
 		host/tests/render/test_song_render.c -o host/tests/render/test_song_render
 	./host/tests/render/test_song_render
 	$(CC) $(CFLAGS) -Ihost/render/gameboy \
@@ -88,6 +89,19 @@ test-render:
 	./host/tests/render/test_render_silence
 
 test: test-host test-coverage test-render
+
+# Host CLI: render a .bax to a mono WAV via the fixed-point renderer.
+#   make render-bax SONG=songs/gameboy/tutorial_groove.bax OUT=out.wav
+SONG ?= songs/gameboy/tutorial_groove.bax
+OUT  ?= out.wav
+render-bax:
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_song_render.c \
+		tools/render-bax.c -o tools/render-bax
+	./tools/render-bax $(SONG) $(OUT) 44100
 
 # --- Firmware targets (WSL/Linux) ---
 
