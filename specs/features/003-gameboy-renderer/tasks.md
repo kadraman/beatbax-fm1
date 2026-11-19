@@ -4,9 +4,9 @@
 
 ## Phase 0: Foundation (blocks stories)
 
-- [ ] T001 Create `host/render/gameboy/` skeleton with fixed-point types and block-render API
-- [ ] T002 [P] Write `docs/renderer.md` with rate, tolerance, and CLI reference commands
-- [ ] T003 Wire renderer input to `host/song/` model from feature 002
+- [x] T001 Create `host/render/gameboy/` skeleton with fixed-point types and block-render API
+- [x] T002 [P] Write `docs/renderer.md` with rate, tolerance, and CLI reference commands
+- [x] T003 Wire renderer input to `host/song/` model from feature 002
 
 **Checkpoint**: empty renderer links and renders silence deterministically.
 
