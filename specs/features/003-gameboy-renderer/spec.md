@@ -2,10 +2,10 @@
 title: "Game Boy renderer on the host"
 id: 3
 slug: "gameboy-renderer"
-status: draft
+status: planned
 authors: ["kadraman"]
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-19
 issue: "https://github.com/kadraman/beatbax-fm1/issues/3"
 area: audio
 ---
@@ -82,10 +82,23 @@ Device playback (004) needs an algorithm that fits FM-1 audio rules. Building an
 - Feature 002 song model API is available or developed in lockstep to `planned`/`in-progress`.
 - BeatBax CLI can produce reference audio or MIDI/event dumps sufficient for comparison; if only realtime play exists, use WAV export from CLI.
 
-## Open questions
+## Resolved questions
 
-- Exact CLI command for reference WAV (`beatbax export` or equivalent) — confirm against installed CLI in plan.
-- Whether event extraction uses BeatBax ISM JSON export.
+Confirmed against installed `beatbax` 0.6.1 (`@beatbax/cli`):
+
+- **Reference WAV** is produced by the built-in `wav` exporter:
+  `beatbax export wav <file> -o <out.wav> -d <seconds> [-c <channels>] [-b 16] [--normalize] [--strict-gb]`.
+  Default output is 44100 Hz, 16-bit, 2-channel (stereo). The global `-r/--sample-rate`
+  flag changes the rate, but the WAV container stores an integer rate, so a fractional
+  device rate (44117.6) is lossy in the header. The comparison harness therefore renders
+  the reference at the CLI default **44100 Hz** and matches it with the host renderer at
+  the same rate (no resampling); see `plan.md` for the rate strategy.
+- **Event extraction** uses the built-in ISM JSON exporter:
+  `beatbax export json <file> -o <out.json>`. It emits the expanded song model
+  (`song.pats`, `song.insts`, `song.seqs`, `song.channels`, `song.bpm`, `song.chip`,
+  `song.play`, `song.metadata`) with per-channel expanded events (`type`, `instrument`,
+  resolved `instProps`, `defaultNote`, `patternIndex`, `barNumber`). This is the source
+  of reference note-on times for SC-003.
 
 ## References
 
