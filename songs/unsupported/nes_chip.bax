@@ -1,0 +1,3 @@
+# Negative fixture: unsupported chip
+chip nes
+bpm 120
