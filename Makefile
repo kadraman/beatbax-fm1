@@ -66,6 +66,10 @@ test-coverage:
 
 test-render:
 	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/tests/render/test_voice.c -o host/tests/render/test_voice
+	./host/tests/render/test_voice
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
 		host/song/song_model.c host/song/song_parse.c \
 		host/render/gameboy/gb_render.c \
 		host/tests/render/test_render_silence.c -o host/tests/render/test_render_silence
@@ -90,5 +94,6 @@ clean:
 	@if [ -d "$(BUILD)" ]; then find $(BUILD) -maxdepth 1 -type f ! -path '$(BUILD)/known-good/*' -delete; fi
 	rm -f host/tests/test_roundtrip host/tests/test_roundtrip.exe
 	rm -f host/tests/render/test_render_silence host/tests/render/test_render_silence.exe
+	rm -f host/tests/render/test_voice host/tests/render/test_voice.exe
 	rm -f songs/gameboy/*.canon*.bax
 	@echo "cleaned build and test outputs (known-good preserved)"

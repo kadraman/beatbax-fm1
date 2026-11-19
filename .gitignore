@@ -13,6 +13,7 @@ dist/
 *.canon*.bax
 host/tests/test_roundtrip
 host/tests/render/test_render_silence
+host/tests/render/test_voice
 
 # Toolchains / deps
 .deps/

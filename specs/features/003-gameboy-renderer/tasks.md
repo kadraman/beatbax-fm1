@@ -12,9 +12,9 @@
 
 ## Phase 1: User Story 1 — Render supported songs (P1)
 
-- [ ] T010 [US1] Implement pulse1/pulse2 cores (duty, envelope) in `host/render/gameboy/`
-- [ ] T011 [US1] Implement wave channel (wave table + volume) in `host/render/gameboy/`
-- [ ] T012 [US1] Implement noise channel in `host/render/gameboy/`
+- [x] T010 [US1] Implement pulse1/pulse2 cores (duty, envelope) in `host/render/gameboy/`
+- [x] T011 [US1] Implement wave channel (wave table + volume) in `host/render/gameboy/`
+- [x] T012 [US1] Implement noise channel in `host/render/gameboy/`
 - [ ] T013 [US1] Implement scheduler/expansion tick consuming song model
 - [ ] T014 [US1] Implement supported Game Boy effects from the frozen surface list
 - [ ] T015 [US1] Unit tests under `host/tests/render/` per voice

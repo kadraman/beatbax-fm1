@@ -23,22 +23,28 @@
  * Fixed-point types for the Game Boy renderer.
  *
  * The first audio path is fixed-point per `specs/global/audio.md`:
- * no `float`/`double` in the shared algorithm destined for firmware.
- * Q15 levels and integer phase accumulators are the default approach.
+ * no `float`/`double` in the shared sample-generation loop destined for firmware.
+ *
+ * Phase uses a full-range 32-bit accumulator: the value `0xFFFFFFFF` represents one
+ * complete output cycle (phase 1.0 in the reference float renderer). Increments are
+ * unsigned and wrap naturally on overflow, which is exactly the reference
+ * `phase += freq / sr; phase -= floor(phase)` behavior.
  */
 
-/* Mono PCM output sample, full-scale signed 16-bit (Q0). */
+/* Mono PCM output sample, full-scale signed 16-bit. */
 typedef int16_t gb_sample_t;
 
-/*
- * Phase accumulator: 32-bit unsigned fixed-point with 16 fractional bits
- * (16.16). The upper 16 bits are the integer sample position; the lower 16
- * bits accumulate the fractional pitch increment per output sample.
- */
+/* Phase accumulator: full-range fraction, one wave cycle == 2^32. */
 typedef uint32_t gb_phase_t;
 
-#define GB_PHASE_FRAC_BITS 16u
-#define GB_PHASE_ONE (1u << GB_PHASE_FRAC_BITS)
+/* Phase increment per output sample, same units as gb_phase_t. */
+typedef uint32_t gb_phase_inc_t;
+
+/* Q15 signed fixed-point for normalized amplitudes in [-1, 1). */
+typedef int16_t gb_q15_t;
+
+/* One full phase cycle (0x1.0000.0000), expressed for the phase accumulator. */
+#define GB_PHASE_ONE_FRAC_BITS 32u
 
 #ifdef __cplusplus
 extern "C" {
