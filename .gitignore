@@ -14,6 +14,7 @@ dist/
 host/tests/test_roundtrip
 host/tests/render/test_render_silence
 host/tests/render/test_voice
+host/tests/render/test_render_note
 
 # Toolchains / deps
 .deps/

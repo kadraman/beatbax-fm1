@@ -18,6 +18,7 @@
 #define BAX_GB_RENDER_H
 
 #include "gb_fixed.h"
+#include "gb_voice.h"
 #include "song_model.h"
 
 #ifdef __cplusplus
@@ -65,6 +66,33 @@ void gb_render_init(gb_render_state_t *st, const bax_song_t *song, uint32_t samp
  * deterministic for identical initial state and `frame_count`.
  */
 void gb_render_block(gb_render_state_t *st, gb_sample_t *out, uint32_t frame_count);
+
+/*
+ * Per-note render primitives (mono). These are the fixed-point equivalents of
+ * BeatBax `renderPulse` / `renderWave` / `renderNoise` WITHOUT effects/macros
+ * (those land in Phase 1 T014). Each writes `duration` samples into `out`.
+ */
+
+/*
+ * Pulse note. `phase` is the persistent per-channel phase accumulator
+ * (continued across notes, matching `channelPhaseState`). `inc` is the Q32
+ * phase increment, `duty_thr` the Q32 duty threshold.
+ */
+void gb_render_pulse(gb_sample_t *out, uint32_t duration,
+                     uint32_t inc, uint32_t duty_thr, gb_phase_t *phase,
+                     uint8_t env_initial, gb_env_dir_t env_dir, uint8_t env_period,
+                     uint32_t sample_rate);
+
+/* Wave note. Phase resets each note (matching `(t*freq)%1`). */
+void gb_render_wave(gb_sample_t *out, uint32_t duration,
+                    uint32_t inc, const uint8_t *table, int sum, int vol_div,
+                    uint32_t sample_rate);
+
+/* Noise note. LFSR state resets each note (matching `triggerGameBoyLfsr`). */
+void gb_render_noise(gb_sample_t *out, uint32_t duration,
+                     uint32_t lfsr_hz, bool width7,
+                     uint8_t env_initial, gb_env_dir_t env_dir, uint8_t env_period,
+                     uint32_t sample_rate);
 
 #ifdef __cplusplus
 }

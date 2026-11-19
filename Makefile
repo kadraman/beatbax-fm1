@@ -70,7 +70,13 @@ test-render:
 		host/tests/render/test_voice.c -o host/tests/render/test_voice
 	./host/tests/render/test_voice
 	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_render.c \
+		host/tests/render/test_render_note.c -o host/tests/render/test_render_note
+	./host/tests/render/test_render_note
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
 		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
 		host/render/gameboy/gb_render.c \
 		host/tests/render/test_render_silence.c -o host/tests/render/test_render_silence
 	./host/tests/render/test_render_silence
