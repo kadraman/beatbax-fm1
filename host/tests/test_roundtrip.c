@@ -129,6 +129,234 @@ static void test_unsupported_refusals(void) {
     printf("  PASS: Refused out-of-range channel number (construct: '%s')\n", err.construct);
 }
 
+static void test_entity_name_length(void) {
+    printf("Testing entity name length validation...\n");
+
+    bax_song_t song;
+    bax_song_init(&song);
+
+    /* A 63-byte name fits (BAX_MAX_NAME_LEN - 1). */
+    char fit[BAX_MAX_NAME_LEN];
+    memset(fit, 'a', BAX_MAX_NAME_LEN - 1);
+    fit[BAX_MAX_NAME_LEN - 1] = '\0';
+    bax_instrument_t *inst = bax_song_add_instrument(&song, fit, BAX_VOICE_PULSE1);
+    assert(inst != NULL);
+    assert(song.instrument_count == 1);
+    assert(strcmp(inst->name, fit) == 0);
+
+    /* A 64-byte name is rejected without changing entity counts. */
+    char over[BAX_MAX_NAME_LEN + 1];
+    memset(over, 'b', BAX_MAX_NAME_LEN);
+    over[BAX_MAX_NAME_LEN] = '\0';
+    assert(bax_song_add_instrument(&song, over, BAX_VOICE_PULSE1) == NULL);
+    assert(song.instrument_count == 1);
+
+    /* The same boundary holds for every other entity helper. */
+    assert(bax_song_add_effect(&song, over, BAX_EFFECT_OTHER) == NULL);
+    assert(bax_song_add_subpat(&song, over) == NULL);
+    assert(bax_song_add_pattern(&song, over) == NULL);
+    assert(bax_song_add_sequence(&song, over) == NULL);
+    assert(bax_song_add_section(&song, over) == NULL);
+    assert(bax_song_add_form(&song, over) == NULL);
+
+    bax_song_free(&song);
+    printf("  PASS: entity name length validation\n");
+}
+
+static void test_array_capacity(void) {
+    printf("Testing macro and wave array capacity limits...\n");
+
+    char src[1024];
+    int off = 0;
+    bax_song_t song;
+    bax_error_t err;
+
+    /* Macro at capacity parses fully without data loss. */
+    off = 0;
+    off += snprintf(src + off, sizeof(src) - off, "chip gameboy\ninst a type=noise vol_env=[");
+    for (int i = 0; i < BAX_MAX_MACRO_LEN; i++) {
+        off += snprintf(src + off, sizeof(src) - off, "%s%d", i ? "," : "", i % 16);
+    }
+    off += snprintf(src + off, sizeof(src) - off, "]\n");
+    assert(bax_song_parse(src, strlen(src), &song, &err));
+    assert(song.instrument_count == 1);
+    assert(song.instruments[0].vol_env.count == BAX_MAX_MACRO_LEN);
+    assert(song.instruments[0].vol_env.values[BAX_MAX_MACRO_LEN - 1] == (BAX_MAX_MACRO_LEN - 1) % 16);
+    bax_song_free(&song);
+
+    /* One-over macro fails with a capacity error. */
+    off = 0;
+    off += snprintf(src + off, sizeof(src) - off, "chip gameboy\ninst a type=noise vol_env=[");
+    for (int i = 0; i < BAX_MAX_MACRO_LEN + 1; i++) {
+        off += snprintf(src + off, sizeof(src) - off, "%s%d", i ? "," : "", i % 16);
+    }
+    off += snprintf(src + off, sizeof(src) - off, "]\n");
+    assert(!bax_song_parse(src, strlen(src), &song, &err));
+    assert(err.code == BAX_ERR_CAPACITY);
+
+    /* Wave at capacity parses fully. */
+    off = 0;
+    off += snprintf(src + off, sizeof(src) - off, "chip gameboy\ninst a type=wave wave=[");
+    for (int i = 0; i < BAX_MAX_WAVE_SAMPLES; i++) {
+        off += snprintf(src + off, sizeof(src) - off, "%s%d", i ? "," : "", i % 16);
+    }
+    off += snprintf(src + off, sizeof(src) - off, "]\n");
+    assert(bax_song_parse(src, strlen(src), &song, &err));
+    assert(song.instruments[0].wave.count == BAX_MAX_WAVE_SAMPLES);
+    bax_song_free(&song);
+
+    /* One-over wave fails with a capacity error. */
+    off = 0;
+    off += snprintf(src + off, sizeof(src) - off, "chip gameboy\ninst a type=wave wave=[");
+    for (int i = 0; i < BAX_MAX_WAVE_SAMPLES + 1; i++) {
+        off += snprintf(src + off, sizeof(src) - off, "%s%d", i ? "," : "", i % 16);
+    }
+    off += snprintf(src + off, sizeof(src) - off, "]\n");
+    assert(!bax_song_parse(src, strlen(src), &song, &err));
+    assert(err.code == BAX_ERR_CAPACITY);
+
+    /* hUGETracker hex wave beyond 32 nibbles fails with a capacity error. */
+    {
+        char hex[64];
+        memset(hex, '0', sizeof(hex));
+        for (int i = 0; i < BAX_MAX_WAVE_SAMPLES + 1; i++) hex[i] = "0123456789ABCDEF"[i % 16];
+        hex[BAX_MAX_WAVE_SAMPLES + 1] = '\0';
+        snprintf(src, sizeof(src), "chip gameboy\ninst a type=wave wave=%s\n", hex);
+        assert(!bax_song_parse(src, strlen(src), &song, &err));
+        assert(err.code == BAX_ERR_CAPACITY);
+    }
+
+    printf("  PASS: macro and wave array capacity limits\n");
+}
+
+static void test_unknown_metadata(void) {
+    printf("Testing rejection of unknown song metadata...\n");
+
+    const char *src = "chip gameboy\nsong bpm \"120\"\n";
+    bax_song_t song;
+    bax_error_t err;
+    assert(!bax_song_parse(src, strlen(src), &song, &err));
+    assert(err.code == BAX_ERR_UNSUPPORTED_CONSTRUCT);
+    assert(strcmp(err.construct, "song") == 0);
+    assert(strstr(err.message, "bpm") != NULL);
+
+    printf("  PASS: unknown song metadata refused\n");
+}
+
+static void test_directives_after_instrument(void) {
+    printf("Testing top-level directives immediately after an instrument...\n");
+
+    bax_song_t song;
+    bax_error_t err;
+
+    const char *steps = "chip gameboy\ninst a type=noise\nstepsPerBar 8\n";
+    assert(bax_song_parse(steps, strlen(steps), &song, &err));
+    assert(song.steps_per_bar == 8);
+    bax_song_free(&song);
+
+    const char *scale = "chip gameboy\ninst a type=noise\nscale G major\n";
+    assert(bax_song_parse(scale, strlen(scale), &song, &err));
+    assert(strcmp(song.scale_root, "G") == 0);
+    assert(strcmp(song.scale_mode, "major") == 0);
+    bax_song_free(&song);
+
+    const char *section = "chip gameboy\ninst a type=noise\nsection s { mel = p }\n";
+    assert(bax_song_parse(section, strlen(section), &song, &err));
+    assert(song.section_count == 1);
+    assert(strcmp(song.sections[0].name, "s") == 0);
+    bax_song_free(&song);
+
+    const char *form = "chip gameboy\ninst a type=noise\nform f = s\n";
+    assert(bax_song_parse(form, strlen(form), &song, &err));
+    assert(song.form_count == 1);
+    assert(strcmp(song.forms[0].name, "f") == 0);
+    bax_song_free(&song);
+
+    printf("  PASS: directives after instrument\n");
+}
+
+static void test_seq_token_capacity(void) {
+    printf("Testing sequence-reference token capacity...\n");
+
+    char src[512];
+    int off;
+    bax_song_t song;
+    bax_error_t err;
+
+    /* A 255-byte reference fits item->raw (BAX_MAX_STR_LEN - 1). */
+    off = 0;
+    off += snprintf(src + off, sizeof(src) - off, "chip gameboy\nseq s = ");
+    for (int i = 0; i < BAX_MAX_STR_LEN - 1; i++) src[off++] = 'x';
+    src[off++] = '\n';
+    src[off] = '\0';
+    assert(bax_song_parse(src, strlen(src), &song, &err));
+    assert(song.sequence_count == 1);
+    assert(song.sequences[0].item_count == 1);
+    bax_song_free(&song);
+
+    /* One byte more is refused rather than truncated. */
+    off = 0;
+    off += snprintf(src + off, sizeof(src) - off, "chip gameboy\nseq s = ");
+    for (int i = 0; i < BAX_MAX_STR_LEN; i++) src[off++] = 'x';
+    src[off++] = '\n';
+    src[off] = '\0';
+    assert(!bax_song_parse(src, strlen(src), &song, &err));
+    assert(err.code == BAX_ERR_CAPACITY);
+
+    printf("  PASS: sequence-reference token capacity\n");
+}
+
+static void test_channel_auto_option(void) {
+    printf("Testing rejection of unknown channel-auto options...\n");
+
+    const char *src = "chip gameboy\nchannel auto form f inst=x bogus=1\n";
+    bax_song_t song;
+    bax_error_t err;
+    assert(!bax_song_parse(src, strlen(src), &song, &err));
+    assert(err.code == BAX_ERR_UNSUPPORTED_CONSTRUCT);
+    assert(strcmp(err.construct, "channel") == 0);
+    assert(strstr(err.message, "bogus=1") != NULL);
+
+    printf("  PASS: unknown channel-auto option refused\n");
+}
+
+static void test_metadata_escaping(void) {
+    printf("Testing metadata escaping round-trip...\n");
+
+    const char *src =
+        "chip gameboy\n"
+        "song name \"He said \\\"hi\\\"\"\n"
+        "song description \"\"\"first line\nsecond line\"\"\"\n"
+        "song tags \"tag1, tag2\"\n";
+    bax_song_t song;
+    bax_error_t err;
+    assert(bax_song_parse(src, strlen(src), &song, &err));
+
+    assert(strcmp(song.name, "He said \"hi\"") == 0);
+    assert(strcmp(song.description, "first line\nsecond line") == 0);
+
+    char *out1 = NULL;
+    size_t len1 = 0;
+    assert(bax_song_write_alloc(&song, &out1, &len1));
+
+    bax_song_t song2;
+    assert(bax_song_parse(out1, len1, &song2, &err));
+    assert(strcmp(song2.name, "He said \"hi\"") == 0);
+    assert(strcmp(song2.description, "first line\nsecond line") == 0);
+
+    char *out2 = NULL;
+    size_t len2 = 0;
+    assert(bax_song_write_alloc(&song2, &out2, &len2));
+    assert(len1 == len2 && strcmp(out1, out2) == 0);
+
+    bax_song_free(&song);
+    bax_song_free(&song2);
+    free(out1);
+    free(out2);
+
+    printf("  PASS: metadata escaping round-trip\n");
+}
+
 int main(int argc, char **argv) {
     if (argc > 1) {
         printf("Testing custom song: %s\n", argv[1]);
@@ -155,6 +383,14 @@ int main(int argc, char **argv) {
                            "songs/gameboy/grassland_dash.canon2.bax");
 
     test_unsupported_refusals();
+
+    test_entity_name_length();
+    test_array_capacity();
+    test_unknown_metadata();
+    test_directives_after_instrument();
+    test_seq_token_capacity();
+    test_channel_auto_option();
+    test_metadata_escaping();
 
     printf("\nAll unit tests passed successfully!\n");
     return 0;

@@ -136,6 +136,7 @@ void bax_song_free(bax_song_t *song) {
 
 bax_instrument_t *bax_song_add_instrument(bax_song_t *song, const char *name, bax_voice_type_t type) {
     if (!song || !name) return NULL;
+    if (strlen(name) >= BAX_MAX_NAME_LEN) return NULL;
 
     if (song->instrument_count >= song->instrument_capacity) {
         size_t new_cap = song->instrument_capacity == 0 ? 8 : song->instrument_capacity * 2;
@@ -161,6 +162,7 @@ bax_instrument_t *bax_song_add_instrument(bax_song_t *song, const char *name, ba
 
 bax_effect_t *bax_song_add_effect(bax_song_t *song, const char *name, bax_effect_type_t type) {
     if (!song || !name) return NULL;
+    if (strlen(name) >= BAX_MAX_NAME_LEN) return NULL;
 
     if (song->effect_count >= song->effect_capacity) {
         size_t new_cap = song->effect_capacity == 0 ? 8 : song->effect_capacity * 2;
@@ -179,6 +181,7 @@ bax_effect_t *bax_song_add_effect(bax_song_t *song, const char *name, bax_effect
 
 bax_subpat_t *bax_song_add_subpat(bax_song_t *song, const char *name) {
     if (!song || !name) return NULL;
+    if (strlen(name) >= BAX_MAX_NAME_LEN) return NULL;
 
     if (song->subpattern_count >= song->subpattern_capacity) {
         size_t new_cap = song->subpattern_capacity == 0 ? 8 : song->subpattern_capacity * 2;
@@ -196,6 +199,7 @@ bax_subpat_t *bax_song_add_subpat(bax_song_t *song, const char *name) {
 
 bax_pattern_t *bax_song_add_pattern(bax_song_t *song, const char *name) {
     if (!song || !name) return NULL;
+    if (strlen(name) >= BAX_MAX_NAME_LEN) return NULL;
 
     if (song->pattern_count >= song->pattern_capacity) {
         size_t new_cap = song->pattern_capacity == 0 ? 16 : song->pattern_capacity * 2;
@@ -213,6 +217,7 @@ bax_pattern_t *bax_song_add_pattern(bax_song_t *song, const char *name) {
 
 bax_sequence_t *bax_song_add_sequence(bax_song_t *song, const char *name) {
     if (!song || !name) return NULL;
+    if (strlen(name) >= BAX_MAX_NAME_LEN) return NULL;
 
     if (song->sequence_count >= song->sequence_capacity) {
         size_t new_cap = song->sequence_capacity == 0 ? 8 : song->sequence_capacity * 2;
@@ -280,6 +285,7 @@ const bax_sequence_t *bax_song_find_sequence(const bax_song_t *song, const char 
 
 bax_section_t *bax_song_add_section(bax_song_t *song, const char *name) {
     if (!song || !name) return NULL;
+    if (strlen(name) >= BAX_MAX_NAME_LEN) return NULL;
 
     if (song->section_count >= song->section_capacity) {
         size_t new_cap = song->section_capacity == 0 ? 8 : song->section_capacity * 2;
@@ -297,6 +303,7 @@ bax_section_t *bax_song_add_section(bax_song_t *song, const char *name) {
 
 bax_form_t *bax_song_add_form(bax_song_t *song, const char *name) {
     if (!song || !name) return NULL;
+    if (strlen(name) >= BAX_MAX_NAME_LEN) return NULL;
 
     if (song->form_count >= song->form_capacity) {
         size_t new_cap = song->form_capacity == 0 ? 4 : song->form_capacity * 2;

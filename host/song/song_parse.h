@@ -31,6 +31,7 @@ typedef enum {
     BAX_ERR_UNSUPPORTED_CONSTRUCT,
     BAX_ERR_INVALID_CHANNEL,
     BAX_ERR_SYNTAX,
+    BAX_ERR_CAPACITY,
     BAX_ERR_OUT_OF_MEMORY
 } bax_error_code_t;
 

@@ -246,12 +246,19 @@ static bool read_string_literal(parser_ctx_t *ctx, char *buf, size_t buf_size) {
     return false;
 }
 
-static bool parse_macro_array(const char *str, bax_macro_env_t *macro) {
+typedef enum {
+    ARR_OK = 0,
+    ARR_NOT_ARRAY = 1,   /* input is not a [..] array (or no wave samples) */
+    ARR_OVERFLOW = 2     /* more elements than the fixed model capacity */
+} array_result_t;
+
+static array_result_t parse_macro_array(const char *str, bax_macro_env_t *macro) {
     macro->count = 0;
     macro->loop_point = -1;
     const char *p = strchr(str, '[');
-    if (!p) return false;
+    if (!p) return ARR_NOT_ARRAY;
     p++;
+    size_t total = 0;
     while (*p && *p != ']') {
         while (*p == ' ' || *p == '\t' || *p == ',') p++;
         if (*p == ']') break;
@@ -266,35 +273,41 @@ static bool parse_macro_array(const char *str, bax_macro_env_t *macro) {
         if (macro->count < BAX_MAX_MACRO_LEN) {
             macro->values[macro->count++] = (int8_t)val;
         }
+        total++;
         p = end;
     }
-    return true;
+    if (total > BAX_MAX_MACRO_LEN) return ARR_OVERFLOW;
+    return ARR_OK;
 }
 
-static bool parse_wave_array(const char *str, bax_gb_wave_t *wave) {
+static array_result_t parse_wave_array(const char *str, bax_gb_wave_t *wave) {
     wave->count = 0;
     const char *p = str;
     while (*p == '"' || *p == '\'' || *p == ' ' || *p == '\t') p++;
 
     /* hUGETracker hex form: one hex digit per nibble, e.g. "0478ABBB…" (unquoted or quoted). */
     if (*p != '[') {
-        size_t n = 0;
-        while (*p && *p != '"' && *p != '\'' && n < BAX_MAX_WAVE_SAMPLES) {
+        size_t total = 0;
+        while (*p && *p != '"' && *p != '\'') {
             char c = *p;
             int v = -1;
             if (c >= '0' && c <= '9') v = c - '0';
             else if (c >= 'a' && c <= 'f') v = c - 'a' + 10;
             else if (c >= 'A' && c <= 'F') v = c - 'A' + 10;
             if (v >= 0) {
-                wave->samples[n++] = (uint8_t)v;
+                if (wave->count < BAX_MAX_WAVE_SAMPLES) {
+                    wave->samples[wave->count++] = (uint8_t)v;
+                }
+                total++;
             }
             p++;
         }
-        wave->count = n;
-        return n > 0;
+        if (total > BAX_MAX_WAVE_SAMPLES) return ARR_OVERFLOW;
+        return (wave->count > 0) ? ARR_OK : ARR_NOT_ARRAY;
     }
 
     p++;
+    size_t total = 0;
     while (*p && *p != ']') {
         while (*p == ' ' || *p == '\t' || *p == ',') p++;
         if (*p == ']') break;
@@ -304,9 +317,11 @@ static bool parse_wave_array(const char *str, bax_gb_wave_t *wave) {
         if (wave->count < BAX_MAX_WAVE_SAMPLES) {
             wave->samples[wave->count++] = (uint8_t)val;
         }
+        total++;
         p = end;
     }
-    return true;
+    if (total > BAX_MAX_WAVE_SAMPLES) return ARR_OVERFLOW;
+    return ARR_OK;
 }
 
 static void parse_json_object(const char *str, const char *key, char *out_val, size_t out_size) {
@@ -360,14 +375,20 @@ static void parse_sweep_compact(const char *str, bax_instrument_t *inst) {
     if (c2) inst->sweep.shift = (uint8_t)atoi(c2 + 1);
 }
 
-static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
+typedef enum {
+    OPT_OK = 0,
+    OPT_UNSUPPORTED = 1,
+    OPT_OVERFLOW = 2
+} opt_result_t;
+
+static opt_result_t parse_instrument_option(bax_instrument_t *inst, const char *opt) {
     if (strncmp(opt, "type=", 5) == 0) {
         const char *val = opt + 5;
         if (strcmp(val, "pulse1") == 0) inst->type = BAX_VOICE_PULSE1;
         else if (strcmp(val, "pulse2") == 0) inst->type = BAX_VOICE_PULSE2;
         else if (strcmp(val, "wave") == 0) inst->type = BAX_VOICE_WAVE;
         else if (strcmp(val, "noise") == 0) inst->type = BAX_VOICE_NOISE;
-        else return false;
+        else return OPT_UNSUPPORTED;
     } else if (strncmp(opt, "duty=", 5) == 0) {
         inst->duty = (float)atof(opt + 5);
     } else if (strncmp(opt, "env=", 4) == 0) {
@@ -406,7 +427,7 @@ static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
     } else if (strncmp(opt, "volume=", 7) == 0) {
         inst->wave_volume = (uint8_t)atoi(opt + 7);
     } else if (strncmp(opt, "wave=", 5) == 0) {
-        parse_wave_array(opt + 5, &inst->wave);
+        if (parse_wave_array(opt + 5, &inst->wave) == ARR_OVERFLOW) return OPT_OVERFLOW;
     } else if (strncmp(opt, "gb:width=", 9) == 0) {
         inst->noise_width = (uint8_t)atoi(opt + 9);
     } else if (strncmp(opt, "width=", 6) == 0) {
@@ -424,13 +445,13 @@ static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
     } else if (strncmp(opt, "subpat=", 7) == 0) {
         strncpy(inst->subpat, opt + 7, sizeof(inst->subpat) - 1);
     } else if (strncmp(opt, "vol_env=", 8) == 0) {
-        parse_macro_array(opt + 8, &inst->vol_env);
+        if (parse_macro_array(opt + 8, &inst->vol_env) == ARR_OVERFLOW) return OPT_OVERFLOW;
     } else if (strncmp(opt, "pitch_env=", 10) == 0) {
-        parse_macro_array(opt + 10, &inst->pitch_env);
+        if (parse_macro_array(opt + 10, &inst->pitch_env) == ARR_OVERFLOW) return OPT_OVERFLOW;
     } else if (strncmp(opt, "duty_env=", 9) == 0) {
-        parse_macro_array(opt + 9, &inst->duty_env);
+        if (parse_macro_array(opt + 9, &inst->duty_env) == ARR_OVERFLOW) return OPT_OVERFLOW;
     } else if (strncmp(opt, "arp_env=", 8) == 0) {
-        parse_macro_array(opt + 8, &inst->arp_env);
+        if (parse_macro_array(opt + 8, &inst->arp_env) == ARR_OVERFLOW) return OPT_OVERFLOW;
     } else if (strncmp(opt, "gb:pan=", 7) == 0) {
         strncpy(inst->pan, opt + 7, sizeof(inst->pan) - 1);
         inst->pan_gb = true;
@@ -439,9 +460,9 @@ static bool parse_instrument_option(bax_instrument_t *inst, const char *opt) {
         inst->pan_gb = false;
     } else {
         /* Unsupported option — do not silently drop it. */
-        return false;
+        return OPT_UNSUPPORTED;
     }
-    return true;
+    return OPT_OK;
 }
 
 static bool parse_pattern_token(const char *tok, bax_pat_token_t *ptok) {
@@ -577,6 +598,18 @@ static bool parse_seq_item(const char *tok, bax_seq_item_t *item) {
     return true;
 }
 
+static bool is_top_level_directive(const char *word) {
+    static const char *const directives[] = {
+        "song", "chip", "bpm", "stepsPerBar", "scale", "import",
+        "inst", "effect", "subpat", "pat", "seq", "section", "form",
+        "channel", "play"
+    };
+    for (size_t i = 0; i < sizeof(directives) / sizeof(directives[0]); i++) {
+        if (strcmp(word, directives[i]) == 0) return true;
+    }
+    return false;
+}
+
 bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_error_t *out_err) {
     if (!text || len == 0) {
         bax_error_set(out_err, BAX_ERR_EMPTY_FILE, 1, 1, "song", "empty song file");
@@ -625,6 +658,11 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                 strncpy(out_song->description, str_val, sizeof(out_song->description) - 1);
             } else if (strcmp(subkey, "tags") == 0) {
                 strncpy(out_song->tags, str_val, sizeof(out_song->tags) - 1);
+            } else {
+                bax_error_set(out_err, BAX_ERR_UNSUPPORTED_CONSTRUCT, line_start, col_start,
+                              "song", "unsupported song metadata key: %s", subkey);
+                bax_song_free(out_song);
+                return false;
             }
         } else if (strcmp(keyword, "chip") == 0) {
             char chip_name[BAX_MAX_NAME_LEN];
@@ -689,16 +727,7 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                         ctx.pos = save_pos;
                         ctx.line = save_line;
                         ctx.col = save_col;
-                        if (strcmp(next_word, "inst") == 0 ||
-                            strcmp(next_word, "pat") == 0 ||
-                            strcmp(next_word, "seq") == 0 ||
-                            strcmp(next_word, "channel") == 0 ||
-                            strcmp(next_word, "play") == 0 ||
-                            strcmp(next_word, "effect") == 0 ||
-                            strcmp(next_word, "subpat") == 0 ||
-                            strcmp(next_word, "song") == 0 ||
-                            strcmp(next_word, "chip") == 0 ||
-                            strcmp(next_word, "bpm") == 0) {
+                        if (is_top_level_directive(next_word)) {
                             break;
                         }
                     } else {
@@ -736,15 +765,21 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                 }
                 opt_buf[oi] = '\0';
                 if (oi > 0) {
-                    if (!parse_instrument_option(inst, opt_buf)) {
+                    opt_result_t opt_res = parse_instrument_option(inst, opt_buf);
+                    if (opt_res != OPT_OK) {
                         char opt_key[64];
                         const char *eq = strchr(opt_buf, '=');
                         size_t klen = eq ? (size_t)(eq - opt_buf) : strlen(opt_buf);
                         if (klen >= sizeof(opt_key)) klen = sizeof(opt_key) - 1;
                         memcpy(opt_key, opt_buf, klen);
                         opt_key[klen] = '\0';
-                        bax_error_set(out_err, BAX_ERR_UNSUPPORTED_CONSTRUCT, line_start, col_start,
-                                      "inst", "unsupported instrument option: %s", opt_key);
+                        if (opt_res == OPT_OVERFLOW) {
+                            bax_error_set(out_err, BAX_ERR_CAPACITY, line_start, col_start,
+                                          "inst", "instrument option '%s' exceeds capacity", opt_key);
+                        } else {
+                            bax_error_set(out_err, BAX_ERR_UNSUPPORTED_CONSTRUCT, line_start, col_start,
+                                          "inst", "unsupported instrument option: %s", opt_key);
+                        }
                         bax_song_free(out_song);
                         return false;
                     }
@@ -830,13 +865,7 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                 ctx.line = save_line;
                 ctx.col = save_col;
 
-                if (strcmp(next_tok, "subpat") == 0 ||
-                    strcmp(next_tok, "pat") == 0 ||
-                    strcmp(next_tok, "seq") == 0 ||
-                    strcmp(next_tok, "channel") == 0 ||
-                    strcmp(next_tok, "play") == 0 ||
-                    strcmp(next_tok, "inst") == 0 ||
-                    strcmp(next_tok, "effect") == 0) {
+                if (is_top_level_directive(next_tok)) {
                     break;
                 }
 
@@ -945,16 +974,27 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                     break;
                 }
 
-                char item_tok[BAX_MAX_NAME_LEN];
+                char item_tok[BAX_MAX_STR_LEN];
                 size_t ii = 0;
+                bool item_overflow = false;
                 while (ctx.pos < ctx.len) {
                     char c = peek_char(&ctx);
                     if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '#') break;
-                    if (ii + 1 < sizeof(item_tok)) item_tok[ii++] = c;
+                    if (ii + 1 < sizeof(item_tok)) {
+                        item_tok[ii++] = c;
+                    } else {
+                        item_overflow = true;
+                    }
                     next_char(&ctx);
                 }
                 item_tok[ii] = '\0';
                 if (ii == 0) continue;
+                if (item_overflow) {
+                    bax_error_set(out_err, BAX_ERR_CAPACITY, line_start, col_start,
+                                  "seq", "sequence reference exceeds %d bytes", (int)sizeof(item_tok) - 1);
+                    bax_song_free(out_song);
+                    return false;
+                }
 
                 if (seq->item_count >= seq->item_capacity) {
                     size_t new_cap = seq->item_capacity == 0 ? 8 : seq->item_capacity * 2;
@@ -1113,8 +1153,15 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
                         else next_char(&ctx);
                     }
                     opt[oi] = '\0';
-                    if (strncmp(opt, "inst=", 5) == 0) {
-                        strncpy(out_song->auto_form_inst, opt + 5, sizeof(out_song->auto_form_inst) - 1);
+                    if (opt[0] != '\0') {
+                        if (strncmp(opt, "inst=", 5) == 0) {
+                            strncpy(out_song->auto_form_inst, opt + 5, sizeof(out_song->auto_form_inst) - 1);
+                        } else {
+                            bax_error_set(out_err, BAX_ERR_UNSUPPORTED_CONSTRUCT, line_start, col_start,
+                                          "channel", "unsupported channel-auto option: %s", opt);
+                            bax_song_free(out_song);
+                            return false;
+                        }
                     }
                 }
             } else {
@@ -1280,7 +1327,13 @@ bool bax_song_parse_file(const char *path, bax_song_t *out_song, bax_error_t *ou
     }
 
     size_t rd = fread(buf, 1, sz, f);
+    int read_err = ferror(f);
     fclose(f);
+    if (read_err || rd != (size_t)sz) {
+        free(buf);
+        bax_error_set(out_err, BAX_ERR_IO, 0, 0, "file", "incomplete or failed read of '%s'", path);
+        return false;
+    }
     buf[rd] = '\0';
 
     bool ok = bax_song_parse(buf, rd, out_song, out_err);

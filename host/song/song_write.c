@@ -323,19 +323,60 @@ static void write_channel_auto(write_ctx_t *ctx, const bax_song_t *song) {
     w_printf(ctx, "\n");
 }
 
+/* Serialize a metadata string value into a BeatBax string literal, escaping
+ * quotes/backslashes and using the triple-quoted form for multi-line values. */
+static void write_metadata_string(write_ctx_t *ctx, const char *s) {
+    bool multiline = false;
+    for (const char *p = s; *p; p++) {
+        if (*p == '\n' || *p == '\r') {
+            multiline = true;
+            break;
+        }
+    }
+
+    if (multiline) {
+        w_printf(ctx, "\"\"\"%s\"\"\"", s);
+        return;
+    }
+
+    w_printf(ctx, "\"");
+    for (const char *p = s; *p; p++) {
+        if (*p == '"' || *p == '\\') {
+            w_printf(ctx, "\\%c", *p);
+        } else if (*p == '\n') {
+            w_printf(ctx, "\\n");
+        } else if (*p == '\t') {
+            w_printf(ctx, "\\t");
+        } else if (*p == '\r') {
+            w_printf(ctx, "\\r");
+        } else {
+            w_printf(ctx, "%c", *p);
+        }
+    }
+    w_printf(ctx, "\"");
+}
+
 static bool write_internal(const bax_song_t *song, write_ctx_t *ctx) {
     /* Metadata */
     if (song->name[0] != '\0') {
-        w_printf(ctx, "song name \"%s\"\n", song->name);
+        w_printf(ctx, "song name ");
+        write_metadata_string(ctx, song->name);
+        w_printf(ctx, "\n");
     }
     if (song->artist[0] != '\0') {
-        w_printf(ctx, "song artist \"%s\"\n", song->artist);
+        w_printf(ctx, "song artist ");
+        write_metadata_string(ctx, song->artist);
+        w_printf(ctx, "\n");
     }
     if (song->description[0] != '\0') {
-        w_printf(ctx, "song description \"%s\"\n", song->description);
+        w_printf(ctx, "song description ");
+        write_metadata_string(ctx, song->description);
+        w_printf(ctx, "\n");
     }
     if (song->tags[0] != '\0') {
-        w_printf(ctx, "song tags \"%s\"\n", song->tags);
+        w_printf(ctx, "song tags ");
+        write_metadata_string(ctx, song->tags);
+        w_printf(ctx, "\n");
     }
     if (song->name[0] != '\0' || song->artist[0] != '\0' ||
         song->description[0] != '\0' || song->tags[0] != '\0') {
@@ -484,7 +525,7 @@ bool bax_song_write_file(const bax_song_t *song, const char *path) {
         return false;
     }
     size_t written = fwrite(str, 1, len, f);
-    fclose(f);
+    int close_rc = fclose(f);
     free(str);
-    return (written == len);
+    return (written == len && close_rc == 0);
 }

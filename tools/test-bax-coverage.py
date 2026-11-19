@@ -22,7 +22,10 @@ BIN = os.path.join(REPO, "host", "tests", "test_roundtrip.exe" if os.name == "nt
 
 def run(cmd, cwd=REPO, timeout=30):
     use_shell = os.name == "nt"
-    args = " ".join(cmd) if (use_shell and isinstance(cmd, list)) else cmd
+    if use_shell and isinstance(cmd, list):
+        args = subprocess.list2cmdline(cmd)
+    else:
+        args = cmd
     try:
         r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout,
                            shell=use_shell, encoding="utf-8", errors="replace")
