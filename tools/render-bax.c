@@ -89,7 +89,7 @@ static int write_wav(const char *path, const gb_sample_t *mono, size_t len, uint
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: render-bax <input.bax> <output.wav> [sample_rate]\n");
+        fprintf(stderr, "usage: render-bax <input.bax> <output.wav> [sample_rate] [channel 1-4]\n");
         return 2;
     }
     uint32_t rate = 44100;
@@ -97,6 +97,13 @@ int main(int argc, char **argv) {
         rate = (uint32_t)atoi(argv[3]);
         if (rate == 0) {
             rate = 44100;
+        }
+    }
+    uint32_t channel_mask = 0;
+    if (argc >= 5) {
+        int ch = atoi(argv[4]);
+        if (ch >= 1 && ch <= 4) {
+            channel_mask = 1u << (ch - 1);
         }
     }
 
@@ -111,7 +118,7 @@ int main(int argc, char **argv) {
     gb_sample_t *out = NULL;
     size_t len = 0;
     char errbuf[256];
-    if (!gb_song_render_mono(&song, rate, &out, &len, errbuf, sizeof(errbuf))) {
+    if (!gb_song_render_mono_mask(&song, rate, channel_mask, &out, &len, errbuf, sizeof(errbuf))) {
         fprintf(stderr, "render error: %s\n", errbuf);
         bax_song_free(&song);
         return 1;

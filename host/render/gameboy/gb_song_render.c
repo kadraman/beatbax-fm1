@@ -274,9 +274,10 @@ static void expand_channel_auto(gb_expand_ctx_t *ctx, gb_ev_list_t lists[BAX_MAX
     }
 }
 
-bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
-                         gb_sample_t **out_mono, size_t *out_len,
-                         char *errbuf, size_t errbuf_len) {
+bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
+                              uint32_t channel_mask,
+                              gb_sample_t **out_mono, size_t *out_len,
+                              char *errbuf, size_t errbuf_len) {
     if (!song || !out_mono || !out_len) {
         if (errbuf && errbuf_len) {
             snprintf(errbuf, errbuf_len, "null argument");
@@ -376,6 +377,9 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
     gb_channel_state_init(&state);
 
     for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
+        if (channel_mask != 0 && !(channel_mask & (1u << c))) {
+            continue;
+        }
         for (size_t i = 0; i < lists[c].count; i++) {
             const gb_ev_t *ev = &lists[c].items[i];
             const bax_instrument_t *inst = bax_song_find_instrument(song, ev->inst);
@@ -466,4 +470,10 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
     *out_mono = out;
     *out_len = total;
     return true;
+}
+
+bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
+                         gb_sample_t **out_mono, size_t *out_len,
+                         char *errbuf, size_t errbuf_len) {
+    return gb_song_render_mono_mask(song, sample_rate, 0, out_mono, out_len, errbuf, errbuf_len);
 }

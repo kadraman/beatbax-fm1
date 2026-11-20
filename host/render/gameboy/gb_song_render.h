@@ -42,6 +42,15 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
                          gb_sample_t **out_mono, size_t *out_len,
                          char *errbuf, size_t errbuf_len);
 
+/*
+ * Same as gb_song_render_mono, but renders only the channels whose bit is set in
+ * `channel_mask` (bit 0 = channel 1). Pass 0 to render all channels.
+ */
+bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
+                              uint32_t channel_mask,
+                              gb_sample_t **out_mono, size_t *out_len,
+                              char *errbuf, size_t errbuf_len);
+
 #ifdef __cplusplus
 }
 #endif

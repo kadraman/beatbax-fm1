@@ -67,5 +67,9 @@ normalized correlation over the trimmed non-silent region against the 0.95 gate.
 | `gb_uge_note_demo.bax` | 1.000 |
 
 `grassland_dash.bax` renders with exact note timing and length but ~0.55
-correlation: the continuous effects (vibrato duration, portamento) still have
-fixed-point precision gaps that drift the persistent pulse phase.
+correlation. Per-channel isolation (`render-bax -c N`) shows the drift is
+confined to the frequency-modulated channels (arp-heavy harmony 0.18, melody
+0.53, wave 0.63) while noise is exact (1.00) — a sub-sample phase drift that
+accumulates over the 20 s song in the persistent pulse/wave phase. The effect
+formulas match BeatBax (`effects/index.ts`, `pcmRenderer.ts`); this is a residual
+fixed-point accumulation, not a timing or formula error.
