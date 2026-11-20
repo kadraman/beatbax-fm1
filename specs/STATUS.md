@@ -6,7 +6,6 @@ Next available feature number: **008**
 
 | ID | Slug | Status | Area | Issue | Summary |
 |----|------|--------|------|-------|---------|
-| 003 | [gameboy-renderer](features/003-gameboy-renderer/) | in-progress | audio | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | Fixed-point Game Boy voices; CLI comparison |
 | 004 | [device-player](features/004-device-player/) | draft | firmware | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | Play fixture from flash on FM-1 |
 | 005 | [graphical-composer](features/005-graphical-composer/) | draft | ui | [#5](https://github.com/kadraman/beatbax-fm1/issues/5) | Song / Pattern / Chain / Instrument / Mix screens |
 | 006 | [store-usb-transfer](features/006-store-usb-transfer/) | draft | firmware | [#6](https://github.com/kadraman/beatbax-fm1/issues/6) | Flash store + host USB transfer of `.bax` |
@@ -18,6 +17,7 @@ Next available feature number: **008**
 |----|------|--------|------|-------|---------|
 | 001 | [platform-bring-up](complete/001-platform-bring-up/) | complete | firmware | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | Pin Felucca; screen, controls, test tone, USB, recovery |
 | 002 | [bax-round-trip](complete/002-bax-round-trip/) | complete | song-model | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) | Host Game Boy `.bax` parse/write; CLI verify |
+| 003 | [gameboy-renderer](complete/003-gameboy-renderer/) | complete | audio | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | Fixed-point Game Boy voices; CLI comparison |
 
 ## Archive (`specs/archive/`)
 

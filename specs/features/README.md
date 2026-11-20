@@ -8,8 +8,6 @@ See [../README.md](../README.md) for process and [../STATUS.md](../STATUS.md) fo
 
 | Folder | Title | Issue |
 |--------|-------|-------|
-| [002-bax-round-trip](002-bax-round-trip/) | `.bax` round-trip on the host | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) |
-| [003-gameboy-renderer](003-gameboy-renderer/) | Game Boy renderer on the host | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) |
 | [004-device-player](004-device-player/) | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) |
 | [005-graphical-composer](005-graphical-composer/) | Graphical composer | [#5](https://github.com/kadraman/beatbax-fm1/issues/5) |
 | [006-store-usb-transfer](006-store-usb-transfer/) | Store and USB transfer | [#6](https://github.com/kadraman/beatbax-fm1/issues/6) |

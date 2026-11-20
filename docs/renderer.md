@@ -2,7 +2,7 @@
 
 Engineering reference for the fixed-point Game Boy (DMG-01) renderer
 (`host/render/gameboy/`) and its CLI comparison harness. The spec of record is
-[`specs/features/003-gameboy-renderer/`](../specs/features/003-gameboy-renderer/).
+[`specs/complete/003-gameboy-renderer/`](../specs/complete/003-gameboy-renderer/).
 
 ## Rates
 

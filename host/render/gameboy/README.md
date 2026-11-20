@@ -24,4 +24,4 @@ allocation-free.
 
 The skeleton links against the song model and renders **silence**
 deterministically. Voice cores (pulse 1/2, wave, noise), scheduler/expansion,
-and supported effects are implemented in Phase 1 (`specs/features/003-gameboy-renderer/tasks.md`).
+and supported effects are implemented in Phase 1 (`specs/complete/003-gameboy-renderer/tasks.md`).

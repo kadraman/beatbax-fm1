@@ -15,7 +15,7 @@ Product direction for turning the M-VAVE FM-1 into a BeatBax-compatible graphica
 |----|---------|-------|------|
 | [001](specs/complete/001-platform-bring-up/) | Platform bring-up | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | Pin Felucca; screen, controls, test tone, USB; recovery docs |
 | [002](specs/complete/002-bax-round-trip/) | `.bax` round-trip | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) | Host song model for Game Boy subset; CLI verify fixtures |
-| [003](specs/features/003-gameboy-renderer/) | Game Boy renderer | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | Fixed-point four-voice render; compare to BeatBax CLI |
+| [003](specs/complete/003-gameboy-renderer/) | Game Boy renderer | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | Fixed-point four-voice render; compare to BeatBax CLI |
 | [004](specs/features/004-device-player/) | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | Same renderer on FM-1; play fixture from flash |
 | [005](specs/features/005-graphical-composer/) | Graphical composer | [#5](https://github.com/kadraman/beatbax-fm1/issues/5) | Song / Pattern / Chain / Instrument / Mix screens |
 | [006](specs/features/006-store-usb-transfer/) | Store and USB | [#6](https://github.com/kadraman/beatbax-fm1/issues/6) | Save/load `.bax` in flash; host transfer tool |
