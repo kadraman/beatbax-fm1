@@ -154,16 +154,18 @@ static bool expand_pattern(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                     snprintf(cur_inst, sizeof(cur_inst), "%s", t->text + 5);
                     temp_remaining = 0;
                 } else if (strncmp(t->text, "inst(", 5) == 0) {
-                    /* inst(name) or inst(name,dur): temporary instrument. */
+                    /* inst(name) or inst(name,dur): temporary instrument.
+                     * Parse into a scratch buffer so `cur_inst` is preserved. */
+                    char name[BAX_MAX_NAME_LEN];
                     const char *open = t->text + 5;
                     const char *close = strchr(open, ')');
                     size_t n = close ? (size_t)(close - open) : strlen(open);
-                    if (n >= sizeof(cur_inst)) {
-                        n = sizeof(cur_inst) - 1;
+                    if (n >= sizeof(name)) {
+                        n = sizeof(name) - 1;
                     }
-                    memcpy(cur_inst, open, n);
-                    cur_inst[n] = '\0';
-                    char *comma = strchr(cur_inst, ',');
+                    memcpy(name, open, n);
+                    name[n] = '\0';
+                    char *comma = strchr(name, ',');
                     int dur = 1;
                     if (comma) {
                         *comma = '\0';
@@ -172,7 +174,7 @@ static bool expand_pattern(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                             dur = 1;
                         }
                     }
-                    snprintf(temp_inst, sizeof(temp_inst), "%s", cur_inst);
+                    snprintf(temp_inst, sizeof(temp_inst), "%s", name);
                     temp_remaining = dur;
                 } else {
                     /* Named instrument hit. */

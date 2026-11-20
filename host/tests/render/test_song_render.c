@@ -113,6 +113,46 @@ static void test_render_fixture(const char *path, size_t min_samples) {
     bax_song_free(&song);
 }
 
+static void test_temp_instrument_restore(void) {
+    printf("Testing temporary instrument restore...\n");
+    /* a (level 15 -> 8191) is the default; b (level 8 -> 4368) is a one-note
+     * temporary override. The note after the override must return to `a`. */
+    const char *src =
+        "chip gameboy\n"
+        "inst a type=pulse1 duty=50 env=gb:15,flat\n"
+        "inst b type=pulse1 duty=50 env=gb:8,flat\n"
+        "pat p = C4 inst(b,1) D4 E4\n"
+        "channel 1 => inst a pat p\n";
+    bax_song_t song;
+    bax_error_t err;
+    assert(bax_song_parse(src, strlen(src), &song, &err));
+    gb_sample_t *out = NULL;
+    size_t len = 0;
+    char errbuf[256];
+    assert(gb_song_render_mono(&song, 44100, &out, &len, errbuf, sizeof(errbuf)));
+
+    int peak1 = 0, peak2 = 0, peak3 = 0;
+    for (int i = 0; i < 5000; i++) {
+        int a = out[i] < 0 ? -out[i] : out[i];
+        if (a > peak1) peak1 = a;
+    }
+    for (int i = 6000; i < 10000; i++) {
+        int a = out[i] < 0 ? -out[i] : out[i];
+        if (a > peak2) peak2 = a;
+    }
+    for (int i = 11000; i < 15500; i++) {
+        int a = out[i] < 0 ? -out[i] : out[i];
+        if (a > peak3) peak3 = a;
+    }
+    assert(peak1 == 8191); /* note 1: default `a` */
+    assert(peak2 == 4368); /* note 2: temporary `b` */
+    assert(peak3 == 8191); /* note 3: restored to `a` */
+
+    free(out);
+    bax_song_free(&song);
+    printf("  PASS: temporary instrument restores the default\n");
+}
+
 int main(void) {
     printf("Running BeatBax FM-1 Song Render Tests (Phase 1)...\n\n");
     test_render_fixture("songs/gameboy/tutorial_groove.bax", 100000);
@@ -121,6 +161,7 @@ int main(void) {
     test_render_fixture("songs/gameboy/grassland_dash.bax", 500000);
     test_volume_override();
     test_hold_sustain();
+    test_temp_instrument_restore();
     printf("\nAll song render tests passed successfully!\n");
     return 0;
 }
