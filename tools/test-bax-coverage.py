@@ -12,6 +12,7 @@ if every fixture matches its expected outcome.
 """
 import json
 import os
+import shlex
 import subprocess
 import sys
 
@@ -21,17 +22,21 @@ BIN = os.path.join(REPO, "host", "tests", "test_roundtrip.exe" if os.name == "nt
 
 
 def run(cmd, cwd=REPO, timeout=30):
-    use_shell = os.name == "nt"
-    if use_shell and isinstance(cmd, list):
-        args = subprocess.list2cmdline(cmd)
+    # Use the shell on every platform so the Windows `beatbax` shim (a #!/bin/sh
+    # script that execs the Windows node when run under WSL) is interpreted
+    # correctly, and PATH resolution is as forgiving as an interactive shell.
+    if isinstance(cmd, list):
+        args = subprocess.list2cmdline(cmd) if os.name == "nt" else shlex.join(cmd)
     else:
         args = cmd
     try:
         r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout,
-                           shell=use_shell, encoding="utf-8", errors="replace")
+                           shell=True, encoding="utf-8", errors="replace")
         return r.returncode, (r.stdout or "") + (r.stderr or "")
     except subprocess.TimeoutExpired:
         return -1, "TIMEOUT"
+    except FileNotFoundError as e:
+        return 127, "command not found: %s" % e
 
 
 def main():
@@ -60,9 +65,11 @@ def main():
                 print(f"FAIL (ok expected, parse refused): {path}\n  {out.strip().splitlines()[-1] if out.strip() else ''}")
                 failures += 1
                 continue
-            vcode, _ = run(["beatbax", "verify", "custom.canon.bax"])
+            vcode, vout = run(["beatbax", "verify", "custom.canon.bax"])
             if vcode != 0:
                 print(f"FAIL (verify): {path}")
+                if vout.strip():
+                    print(f"  {vout.strip().splitlines()[-1] if vout.strip() else ''}")
                 failures += 1
                 continue
             ok_count += 1
