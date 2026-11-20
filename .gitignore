@@ -16,6 +16,8 @@ host/tests/render/test_render_silence
 host/tests/render/test_voice
 host/tests/render/test_render_note
 host/tests/render/test_song_render
+.cmp-tmp/
+out.wav
 
 # Toolchains / deps
 .deps/

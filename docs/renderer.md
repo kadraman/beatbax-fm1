@@ -51,8 +51,21 @@ near the threshold. `--normalize` is NOT applied to the reference export.
 
 ```text
 make test-render     # build + run host renderer unit tests
+make test-compare    # render fixtures + compare to BeatBax CLI (>= 0.95)
 ```
 
-The comparison harness (`tools/compare-render`, feature 003 Phase 2) will add a
-`make test-compare` target that drives `beatbax export …` and asserts the
-tolerances above.
+`make test-compare` runs `tools/run-compare.py`, which renders each fixture with
+`tools/render-bax`, exports the reference with `beatbax export wav`, and checks the
+normalized correlation over the trimmed non-silent region against the 0.95 gate.
+
+## Measured results (BeatBax CLI 0.6.1, 44100 Hz)
+
+| Fixture | Correlation |
+|---------|-------------|
+| `tutorial_groove.bax` | 0.970 |
+| `gb_sweep_demo.bax` | 1.000 |
+| `gb_uge_note_demo.bax` | 1.000 |
+
+`grassland_dash.bax` renders with exact note timing and length but ~0.55
+correlation: the continuous effects (vibrato duration, portamento) still have
+fixed-point precision gaps that drift the persistent pulse phase.

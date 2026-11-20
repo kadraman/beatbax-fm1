@@ -29,7 +29,7 @@ export AC79_SDK        ?= $(HOME)/.jieli/ac79-sdk
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all clean build package test test-host test-unit test-coverage test-render render-bax
+.PHONY: help all clean build package test test-host test-unit test-coverage test-render test-compare render-bax
 
 help:
 	@echo "BeatBax FM-1 (firmware & host tooling)"
@@ -38,6 +38,7 @@ help:
 	@echo "  make test        run full host test suite + beatbax verify oracle"
 	@echo "  make test-unit   compile and run C song-model unit & idempotence tests"
 	@echo "  make test-render compile and run C Game Boy renderer unit tests"
+	@echo "  make test-compare render fixtures and compare to BeatBax CLI"
 	@echo ""
 	@echo "Firmware targets (WSL/Linux with JieLi toolchain):"
 	@echo "  make build       compile $(NAME).bin"
@@ -88,12 +89,10 @@ test-render:
 		host/tests/render/test_render_silence.c -o host/tests/render/test_render_silence
 	./host/tests/render/test_render_silence
 
-test: test-host test-coverage test-render
+test: test-host test-coverage test-render test-compare
 
-# Host CLI: render a .bax to a mono WAV via the fixed-point renderer.
-#   make render-bax SONG=songs/gameboy/tutorial_groove.bax OUT=out.wav
-SONG ?= songs/gameboy/tutorial_groove.bax
-OUT  ?= out.wav
+# Host CLI: render a .bax to a mono WAV via the fixed-point renderer
+#   (builds tools/render-bax; run it directly: tools/render-bax <song> <out.wav> 44100).
 render-bax:
 	$(CC) $(CFLAGS) -Ihost/render/gameboy \
 		host/song/song_model.c host/song/song_parse.c \
@@ -101,7 +100,10 @@ render-bax:
 		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
 		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_song_render.c \
 		tools/render-bax.c -o tools/render-bax
-	./tools/render-bax $(SONG) $(OUT) 44100
+
+# Feature 003 Phase 2: render + compare fixtures against the BeatBax CLI oracle.
+test-compare: render-bax
+	$(PYTHON) tools/run-compare.py
 
 # --- Firmware targets (WSL/Linux) ---
 

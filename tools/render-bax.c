@@ -25,6 +25,7 @@
 #include "gb_song_render.h"
 #include "song_parse.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,7 @@
 static int write_wav(const char *path, const gb_sample_t *mono, size_t len, uint32_t rate) {
     FILE *f = fopen(path, "wb");
     if (!f) {
+        fprintf(stderr, "fopen '%s' failed: %s\n", path, strerror(errno));
         return -1;
     }
     uint32_t data_bytes = (uint32_t)len * 2u;

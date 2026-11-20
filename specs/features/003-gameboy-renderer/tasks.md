@@ -34,9 +34,9 @@
 
 ## Phase 2: User Story 2 — Compare to BeatBax CLI (P1)
 
-- [ ] T020 [US2] Implement `tools/compare-render` harness (events + resampled WAV metric)
-- [ ] T021 [US2] Add CI/local script target documenting the BeatBax CLI invocation
-- [ ] T022 [US2] Ensure at least three fixtures pass documented tolerances
+- [x] T020 [US2] Implement `tools/compare-render` harness (events + resampled WAV metric)
+- [x] T021 [US2] Add CI/local script target documenting the BeatBax CLI invocation
+- [x] T022 [US2] Ensure at least three fixtures pass documented tolerances
 
 ## Polish
 
