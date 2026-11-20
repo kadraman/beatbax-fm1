@@ -525,7 +525,6 @@ static bool parse_pattern_token(const char *tok, bax_pat_token_t *ptok) {
     /* Determine if base is a musical note (e.g. C3, D#4, Eb5, etc.) */
     char note_letter = (char)toupper((unsigned char)base[0]);
     if (note_letter >= 'A' && note_letter <= 'G') {
-        ptok->kind = BAX_TOKEN_NOTE;
         /* Calculate semitone and octave if present */
         int semi = 0;
         switch (note_letter) {
@@ -543,8 +542,12 @@ static bool parse_pattern_token(const char *tok, bax_pat_token_t *ptok) {
         else if (*np == '-') { np++; }
 
         if (isdigit((unsigned char)*np)) {
+            ptok->kind = BAX_TOKEN_NOTE;
             ptok->octave = *np - '0';
             ptok->semitone = (semi + 12) % 12;
+        } else {
+            /* A-G prefix but no octave digit -> named instrument hit (e.g. "closed_hat"). */
+            ptok->kind = BAX_TOKEN_INLINE_INST;
         }
     } else {
         ptok->kind = BAX_TOKEN_INLINE_INST;

@@ -29,7 +29,7 @@ export AC79_SDK        ?= $(HOME)/.jieli/ac79-sdk
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all clean build package test test-host test-unit test-coverage
+.PHONY: help all clean build package test test-host test-unit test-coverage test-render test-compare render-bax
 
 help:
 	@echo "BeatBax FM-1 (firmware & host tooling)"
@@ -37,6 +37,8 @@ help:
 	@echo "Host targets (standard host GCC & Python):"
 	@echo "  make test        run full host test suite + beatbax verify oracle"
 	@echo "  make test-unit   compile and run C song-model unit & idempotence tests"
+	@echo "  make test-render compile and run C Game Boy renderer unit tests"
+	@echo "  make test-compare render fixtures and compare to BeatBax CLI"
 	@echo ""
 	@echo "Firmware targets (WSL/Linux with JieLi toolchain):"
 	@echo "  make build       compile $(NAME).bin"
@@ -63,7 +65,45 @@ test-host:
 test-coverage:
 	$(PYTHON) tools/test-bax-coverage.py
 
-test: test-host test-coverage
+test-render:
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/tests/render/test_voice.c -o host/tests/render/test_voice
+	./host/tests/render/test_voice
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_render.c \
+		host/tests/render/test_render_note.c -o host/tests/render/test_render_note
+	./host/tests/render/test_render_note
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_song_render.c \
+		host/tests/render/test_song_render.c -o host/tests/render/test_song_render
+	./host/tests/render/test_song_render
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_render.c \
+		host/tests/render/test_render_silence.c -o host/tests/render/test_render_silence
+	./host/tests/render/test_render_silence
+
+test: test-host test-coverage test-render test-compare
+
+# Host CLI: render a .bax to a mono WAV via the fixed-point renderer
+#   (builds tools/render-bax; run it directly: tools/render-bax <song> <out.wav> 44100).
+render-bax:
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_song_render.c \
+		tools/render-bax.c -o tools/render-bax
+
+# Feature 003 Phase 2: render + compare fixtures against the BeatBax CLI oracle.
+test-compare: render-bax
+	$(PYTHON) tools/run-compare.py
 
 # --- Firmware targets (WSL/Linux) ---
 
@@ -81,5 +121,7 @@ clean:
 	@# Drop objects and packages in build/; never touch known-good/.
 	@if [ -d "$(BUILD)" ]; then find $(BUILD) -maxdepth 1 -type f ! -path '$(BUILD)/known-good/*' -delete; fi
 	rm -f host/tests/test_roundtrip host/tests/test_roundtrip.exe
+	rm -f host/tests/render/test_render_silence host/tests/render/test_render_silence.exe
+	rm -f host/tests/render/test_voice host/tests/render/test_voice.exe
 	rm -f songs/gameboy/*.canon*.bax
 	@echo "cleaned build and test outputs (known-good preserved)"

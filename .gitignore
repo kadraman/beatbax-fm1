@@ -12,6 +12,13 @@ dist/
 *.dis
 *.canon*.bax
 host/tests/test_roundtrip
+host/tests/render/test_render_silence
+host/tests/render/test_voice
+host/tests/render/test_render_note
+host/tests/render/test_song_render
+tools/render-bax
+.cmp-tmp/
+out.wav
 
 # Toolchains / deps
 .deps/

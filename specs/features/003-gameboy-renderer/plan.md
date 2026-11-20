@@ -1,6 +1,6 @@
 # Implementation Plan: Game Boy renderer on the host
 
-**Spec**: [spec.md](spec.md) | **Date**: 2026-11-11 | **Branch**: `feat/003-gameboy-renderer`
+**Spec**: [spec.md](spec.md) | **Date**: 2026-11-19 | **Branch**: `feat/003-gameboy-renderer`
 
 ## Summary
 
@@ -69,7 +69,21 @@ docs/renderer.md        # tolerances, rates, how to run harness
 
 - Renderer version noted in docs when tolerances change.
 
-## Open implementation questions
+## Resolved implementation decisions
 
-- Primary WAV metric: correlation vs RMS dB — choose one in `docs/renderer.md` at implementation start and keep SC-003 satisfied.
-- Whether to compare at 44117.6 Hz native then resample, or render host path at 44100 for tests while keeping a 44117.6 mode for device parity.
+- **Primary WAV metric: normalized Pearson correlation ≥ 0.95** on a trimmed non-silent
+  region (SC-003). Correlation is self-normalizing, so it is robust to the gain/pan
+  scaling differences between a fixed-point renderer and the CLI's float path. The
+  harness also prints the RMS dB difference as a diagnostic (not a pass/fail gate) to
+  help triage envelope/amplitude bugs when correlation is near the threshold. `--normalize`
+  is NOT used on the reference export; both signals are compared at their natural levels
+  and the correlation metric handles overall gain.
+- **Rate strategy: render both sides at 44100 Hz** (the CLI's default) and compare
+  sample-for-sample — no resampling. The renderer is **rate-parameterized** (a single
+  `sample_rate` constant drives phase increments and envelope/effect timing); the same
+  shared algorithm runs at **44117.6 Hz** on-device in feature 004. This keeps the host
+  and device renderers bit-identical by construction and sidesteps the WAV header's
+  integer-rate limitation. Event-level comparison (ISM JSON) is rate-independent.
+- **Reference channel handling**: the CLI `wav` exporter emits stereo (2ch, 16-bit). The
+  harness downmixes the reference to mono (mean of L/R) before correlating against the
+  host renderer's mono output.
