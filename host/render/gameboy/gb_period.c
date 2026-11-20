@@ -15,6 +15,7 @@
  */
 
 #include "gb_period.h"
+#include "gb_tables.h"
 
 /*
  * hUGETracker Game Boy period table (packages/engine/src/chips/gameboy/periodTables.ts).
@@ -34,10 +35,24 @@ uint32_t gb_midi_to_period(int midi) {
     if (midi < 36) {
         return 0; /* below C2: lowest representable period */
     }
-    if (midi >= 36 + (int)GB_PERIOD_TABLE_LEN) {
-        return 2047; /* above B7: highest period, silenced by the sr/2 guard */
+    if (midi < 36 + (int)GB_PERIOD_TABLE_LEN) {
+        return gb_period_table[midi - 36];
     }
-    return gb_period_table[midi - 36];
+    /* Equal-temperament fallback for notes above B7 (BeatBax midiToFreq ->
+     * registerFromFreq): freq = 440 * 2^((midi-69)/12); register =
+     * round(2048 - 131072/freq). Clamp only when the register leaves the range. */
+    int semi = midi - 69;
+    int32_t freq_q16 = 28835840; /* 440 * 65536 */
+    int fine_idx = semi * 256 + GB_POW2_FINE_OFFSET;
+    if (fine_idx < 0) fine_idx = 0;
+    if (fine_idx >= GB_POW2_FINE_COUNT) fine_idx = GB_POW2_FINE_COUNT - 1;
+    freq_q16 = (int32_t)(((int64_t)freq_q16 * gb_pow2_fine_q16[fine_idx]) >> 16);
+    uint64_t num = (uint64_t)131072u << 16;
+    uint64_t ratio = (num + (uint64_t)freq_q16 / 2u) / (uint64_t)freq_q16;
+    int64_t reg = 2048 - (int64_t)ratio;
+    if (reg < 0) reg = 0;
+    if (reg > 2047) reg = 2047;
+    return (uint32_t)reg;
 }
 
 uint32_t gb_period_to_inc(uint32_t reg, uint32_t sample_rate) {

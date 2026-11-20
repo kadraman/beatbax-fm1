@@ -38,7 +38,9 @@ static void test_period_table(void) {
     assert(gb_period_to_freq_hz(1547) == 262); /* 131072/501 = 261.6 */
     /* Out-of-range clamps. */
     assert(gb_midi_to_period(10) == 0);
-    assert(gb_midi_to_period(120) == 2047);
+    /* Notes above B7 use the equal-temperament fallback (not forced to 2047). */
+    assert(gb_midi_to_period(108) == 2017); /* C8 */
+    assert(gb_midi_to_period(120) > 2017 && gb_midi_to_period(120) < 2047);
     /* Phase increment is positive and monotonic with register. */
     assert(gb_period_to_inc(44, 44100) > 0);
     assert(gb_period_to_inc(1547, 44100) > gb_period_to_inc(44, 44100));

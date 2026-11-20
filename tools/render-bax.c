@@ -83,8 +83,7 @@ static int write_wav(const char *path, const gb_sample_t *mono, size_t len, uint
             return -1;
         }
     }
-    fclose(f);
-    return 0;
+    return fclose(f) == 0 ? 0 : -1;
 }
 
 int main(int argc, char **argv) {

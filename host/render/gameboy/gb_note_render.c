@@ -63,6 +63,17 @@ static void resolve_noise_clock(const bax_instrument_t *inst, uint32_t *shift, u
     }
 }
 
+/* LFSR phase increment for a noise clock shifted by a macro offset. */
+static uint64_t noise_lfsr_inc_for_offset(int base_index, int offset, uint32_t sample_rate) {
+    int note_index = base_index + offset;
+    if (note_index < 0) note_index = 0;
+    if (note_index > 72) note_index = 72;
+    uint8_t poly = gb_noise_note_poly(note_index);
+    uint32_t s2 = (poly >> 4) & 7u;
+    uint32_t d2 = poly & 7u;
+    return gb_noise_lfsr_inc(s2, d2, sample_rate);
+}
+
 static uint32_t freq_q16_to_inc(int32_t freq_q16, uint32_t sample_rate) {
     if (freq_q16 <= 0 || sample_rate == 0) {
         return 0;
@@ -211,7 +222,8 @@ static const gb_tick_row_t *tick_row_at(const gb_tick_program_t *p, int *last_ti
 static void render_pulse_full(gb_sample_t *dst, uint32_t len,
                               const bax_song_t *song, int midi,
                               const bax_instrument_t *inst, const gb_fx_t *fx,
-                              uint32_t sample_rate, gb_channel_state_t *state, int channel) {
+                              uint32_t sample_rate, int vol_override,
+                              gb_channel_state_t *state, int channel) {
     (void)song;
     uint32_t current_reg = gb_midi_to_period(midi);
     uint32_t duty_thr = gb_duty_threshold((uint32_t)(inst->duty * 10.0f + 0.5f));
@@ -336,10 +348,10 @@ static void render_pulse_full(gb_sample_t *dst, uint32_t len,
             }
         }
 
-        /* Pitch bend: freq *= 2^(semi * progress / 12) with curve shaping. */
+        /* Pitch bend: freq *= 2^(semi * progress / 12) with curve shaping.
+         * Progress clamps at 65536, so the pitch holds after the bend completes. */
         if (fx->bend_semi != 0 && bend_time_samples > 0 &&
-            (int32_t)i >= bend_delay_samples &&
-            (int32_t)i <= bend_delay_samples + bend_time_samples) {
+            (int32_t)i >= bend_delay_samples) {
             int32_t t_rel = (int32_t)i - bend_delay_samples;
             uint32_t p = (uint32_t)(((uint64_t)t_rel << 16) / (uint64_t)bend_time_samples);
             if (p > 65536) p = 65536;
@@ -371,6 +383,9 @@ static void render_pulse_full(gb_sample_t *dst, uint32_t len,
             amp = gb_envelope_q15(env_initial, env_dir, env_period, i, sample_rate);
         }
         int16_t level = (int16_t)(amp >> 2); /* * 0.25 */
+        if (vol_override >= 0) {
+            level = (int16_t)((int32_t)level * vol_override / 15);
+        }
         dst[i] = (bip > 0) ? level : (gb_sample_t)(-level);
     }
 
@@ -380,7 +395,8 @@ static void render_pulse_full(gb_sample_t *dst, uint32_t len,
 static void render_wave_full(gb_sample_t *dst, uint32_t len,
                              const bax_song_t *song, int midi,
                              const bax_instrument_t *inst, const gb_fx_t *fx,
-                             uint32_t sample_rate, gb_channel_state_t *state, int channel) {
+                             uint32_t sample_rate, int vol_override,
+                             gb_channel_state_t *state, int channel) {
     (void)song;
     uint32_t reg = gb_midi_to_period(midi);
     int32_t base_freq = gb_period_to_freq_q16(reg);
@@ -448,6 +464,9 @@ static void render_wave_full(gb_sample_t *dst, uint32_t len,
         if (use_prog_vol) {
             sample = (int16_t)((int32_t)v * vol_scale / 15);
         }
+        if (vol_override >= 0) {
+            sample = (int16_t)((int32_t)sample * vol_override / 15);
+        }
         dst[i] = sample;
     }
 
@@ -457,7 +476,8 @@ static void render_wave_full(gb_sample_t *dst, uint32_t len,
 static void render_noise_full(gb_sample_t *dst, uint32_t len,
                               const bax_song_t *song, int midi,
                               const bax_instrument_t *inst, const gb_fx_t *fx,
-                              uint32_t sample_rate, gb_channel_state_t *state, int channel) {
+                              uint32_t sample_rate, int vol_override,
+                              gb_channel_state_t *state, int channel) {
     (void)song;
     (void)midi;
     (void)fx;
@@ -490,7 +510,14 @@ static void render_noise_full(gb_sample_t *dst, uint32_t len,
         }
     }
 
-    uint64_t lfsr_inc = gb_noise_lfsr_inc(shift, divisor, sample_rate);
+    uint64_t lfsr_inc;
+    if (prog.enabled) {
+        /* Program owns the clock: apply the initial row's offset (BeatBax
+         * resolveNoiseClockWithOffset). */
+        lfsr_inc = noise_lfsr_inc_for_offset(base_index, current_offset, sample_rate);
+    } else {
+        lfsr_inc = gb_noise_lfsr_inc(shift, divisor, sample_rate);
+    }
     uint64_t nphase = 0;
     uint16_t lfsr = gb_noise_lfsr_trigger(width7);
 
@@ -500,13 +527,7 @@ static void render_noise_full(gb_sample_t *dst, uint32_t len,
             if (row) {
                 if (row->offset != current_offset) {
                     current_offset = row->offset;
-                    int note_index = base_index + current_offset;
-                    if (note_index < 0) note_index = 0;
-                    if (note_index > 72) note_index = 72;
-                    uint8_t poly = gb_noise_note_poly(note_index);
-                    uint32_t s2 = (poly >> 4) & 7u;
-                    uint32_t d2 = poly & 7u;
-                    lfsr_inc = gb_noise_lfsr_inc(s2, d2, sample_rate);
+                    lfsr_inc = noise_lfsr_inc_for_offset(base_index, current_offset, sample_rate);
                 }
                 if (use_prog_vol && row->vol >= 0) vol_scale = row->vol;
             }
@@ -524,6 +545,9 @@ static void render_noise_full(gb_sample_t *dst, uint32_t len,
                           ? (int16_t)((vol_scale * 32767) / 15)
                           : gb_envelope_q15(env_initial, env_dir, env_period, i, sample_rate);
         int16_t level = (int16_t)(amp >> 2);
+        if (vol_override >= 0) {
+            level = (int16_t)((int32_t)level * vol_override / 15);
+        }
         dst[i] = (bip > 0) ? level : (gb_sample_t)(-level);
     }
 }
@@ -531,7 +555,7 @@ static void render_noise_full(gb_sample_t *dst, uint32_t len,
 void gb_render_note_full(gb_sample_t *dst, uint32_t len,
                          const bax_song_t *song, int midi,
                          const bax_instrument_t *inst, const char *effect_name,
-                         uint32_t sample_rate,
+                         uint32_t sample_rate, int vol_override,
                          gb_channel_state_t *state, int channel) {
     if (!dst || !inst || len == 0) {
         return;
@@ -542,13 +566,13 @@ void gb_render_note_full(gb_sample_t *dst, uint32_t len,
     switch (inst->type) {
         case BAX_VOICE_PULSE1:
         case BAX_VOICE_PULSE2:
-            render_pulse_full(dst, len, song, midi, inst, &fx, sample_rate, state, channel);
+            render_pulse_full(dst, len, song, midi, inst, &fx, sample_rate, vol_override, state, channel);
             break;
         case BAX_VOICE_WAVE:
-            render_wave_full(dst, len, song, midi, inst, &fx, sample_rate, state, channel);
+            render_wave_full(dst, len, song, midi, inst, &fx, sample_rate, vol_override, state, channel);
             break;
         case BAX_VOICE_NOISE:
-            render_noise_full(dst, len, song, midi, inst, &fx, sample_rate, state, channel);
+            render_noise_full(dst, len, song, midi, inst, &fx, sample_rate, vol_override, state, channel);
             break;
         default:
             break;

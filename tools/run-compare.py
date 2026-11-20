@@ -42,10 +42,15 @@ def read_mono(path):
 
 
 def correlation(a, b):
+    thr = 200
     L = min(len(a), len(b))
+    # Reject unmatched non-silent audio beyond the shorter recording (missing
+    # endings or unintended extra audio must not pass with perfect overlap).
+    longer = a if len(a) > len(b) else b
+    if any(abs(x) >= thr for x in longer[L:]):
+        return 0.0
     a = a[:L]
     b = b[:L]
-    thr = 200
     start = 0
     while start < L and abs(b[start]) < thr:
         start += 1
@@ -87,13 +92,16 @@ def compare_fixture(fixture, render_bin, tmpdir, threshold):
 
 
 def main():
-    args = sys.argv[1:]
-    threshold = THRESHOLD
-    fixtures = list(DEFAULT_FIXTURES)
-    while args and args[0].startswith("--threshold"):
-        threshold = float(args.pop(0).split("=", 1)[1])
-    if args:
-        fixtures = args
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Render fixtures with the host renderer and compare to BeatBax CLI.")
+    parser.add_argument("--threshold", type=float, default=THRESHOLD,
+                        help="minimum normalized correlation (default %.2f)" % THRESHOLD)
+    parser.add_argument("fixtures", nargs="*",
+                        help=".bax fixtures to compare (default: the SC-002 acceptance set)")
+    args = parser.parse_args()
+    threshold = args.threshold
+    fixtures = args.fixtures if args.fixtures else list(DEFAULT_FIXTURES)
 
     render_bin = os.path.join(REPO_ROOT, "tools", "render-bax")
     if os.name == "nt":

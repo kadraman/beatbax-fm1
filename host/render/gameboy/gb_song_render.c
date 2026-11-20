@@ -62,17 +62,18 @@ static uint32_t dur_to_samples(const gb_expand_ctx_t *c, uint64_t steps) {
     return (uint32_t)((steps * 15ull * (uint64_t)c->sample_rate) / (uint64_t)c->bpm);
 }
 
-static void list_push(gb_ev_list_t *list, const gb_ev_t *ev) {
+static bool list_push(gb_ev_list_t *list, const gb_ev_t *ev) {
     if (list->count >= list->cap) {
         size_t ncap = list->cap ? list->cap * 2 : 64;
         gb_ev_t *n = (gb_ev_t *)realloc(list->items, ncap * sizeof(gb_ev_t));
         if (!n) {
-            return;
+            return false;
         }
         list->items = n;
         list->cap = ncap;
     }
     list->items[list->count++] = *ev;
+    return true;
 }
 
 /* Parse a simple note string ("C6", "C2", "D#4") into a MIDI number, or -1. */
@@ -107,30 +108,53 @@ static int note_str_to_midi(const char *s) {
 }
 
 /*
- * Expand one pattern's tokens into events. `cur_inst` is a mutable scratch
- * holding the active instrument name (inline `inst X` changes it).
+ * Expand one pattern's tokens into events. `inst_name` is the channel's default
+ * instrument. Tracks inline `inst` changes, temporary `inst(name,dur)`, inline
+ * `vol:N`, and sustains the preceding note across hold (`-`) steps.
+ * Returns false on allocation failure.
  */
-static void expand_pattern(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
+static bool expand_pattern(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                            const bax_pattern_t *pat, const char *inst_name,
                            int oct_offset, int vol_override, uint64_t *step) {
     char cur_inst[BAX_MAX_NAME_LEN];
     snprintf(cur_inst, sizeof(cur_inst), "%s", inst_name ? inst_name : "");
+    char temp_inst[BAX_MAX_NAME_LEN];
+    temp_inst[0] = '\0';
+    int temp_remaining = 0;
+    int cur_vol = -1; /* inline vol:N */
+
+    bool last_note = false;
+    uint64_t last_start_step = 0;
+    uint64_t last_end_step = 0;
 
     for (size_t i = 0; i < pat->token_count; i++) {
         const bax_pat_token_t *t = &pat->tokens[i];
         switch (t->kind) {
             case BAX_TOKEN_REST:
+                last_note = false;
+                *step += 1;
+                break;
+
             case BAX_TOKEN_HOLD:
+                if (last_note && list->count > 0) {
+                    last_end_step += 1;
+                    list->items[list->count - 1].len_samples =
+                        step_to_sample(ctx, last_end_step) - step_to_sample(ctx, last_start_step);
+                }
+                *step += 1;
+                break;
+
             case BAX_TOKEN_INLINE_VOL:
+                cur_vol = t->vol_level;
                 *step += 1;
                 break;
 
             case BAX_TOKEN_INLINE_INST: {
                 if (strncmp(t->text, "inst ", 5) == 0) {
                     snprintf(cur_inst, sizeof(cur_inst), "%s", t->text + 5);
+                    temp_remaining = 0;
                 } else if (strncmp(t->text, "inst(", 5) == 0) {
-                    /* Temporary instrument inst(name[,dur]). Use the name; the
-                     * temporary-duration counter is a later increment. */
+                    /* inst(name) or inst(name,dur): temporary instrument. */
                     const char *open = t->text + 5;
                     const char *close = strchr(open, ')');
                     size_t n = close ? (size_t)(close - open) : strlen(open);
@@ -140,9 +164,16 @@ static void expand_pattern(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                     memcpy(cur_inst, open, n);
                     cur_inst[n] = '\0';
                     char *comma = strchr(cur_inst, ',');
+                    int dur = 1;
                     if (comma) {
                         *comma = '\0';
+                        dur = atoi(comma + 1);
+                        if (dur < 1) {
+                            dur = 1;
+                        }
                     }
+                    snprintf(temp_inst, sizeof(temp_inst), "%s", cur_inst);
+                    temp_remaining = dur;
                 } else {
                     /* Named instrument hit. */
                     gb_ev_t ev;
@@ -151,49 +182,65 @@ static void expand_pattern(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                     ev.midi = -1;
                     snprintf(ev.inst, sizeof(ev.inst), "%s", t->text);
                     ev.start_sample = step_to_sample(ctx, *step);
-                    ev.len_samples = step_to_sample(ctx, 1);
-                    ev.vol_override = vol_override;
-                    list_push(list, &ev);
+                    ev.len_samples = dur_to_samples(ctx, 1);
+                    ev.vol_override = (cur_vol >= 0) ? cur_vol : vol_override;
+                    if (!list_push(list, &ev)) {
+                        return false;
+                    }
+                    last_note = true;
+                    last_start_step = *step;
+                    last_end_step = *step + 1;
                     *step += 1;
                 }
                 break;
             }
 
             case BAX_TOKEN_NOTE: {
+                const char *inst = (temp_remaining > 0) ? temp_inst : cur_inst;
+                if (temp_remaining > 0) {
+                    temp_remaining--;
+                }
                 int midi = (t->octave + 1) * 12 + t->semitone + oct_offset * 12;
                 int dur = t->duration > 0 ? t->duration : 1;
                 gb_ev_t ev;
                 memset(&ev, 0, sizeof(ev));
                 ev.kind = GB_EV_NOTE;
                 ev.midi = midi;
-                snprintf(ev.inst, sizeof(ev.inst), "%s", cur_inst);
+                snprintf(ev.inst, sizeof(ev.inst), "%s", inst);
                 snprintf(ev.effect, sizeof(ev.effect), "%s", t->effect_name);
                 ev.start_sample = step_to_sample(ctx, *step);
                 ev.len_samples = dur_to_samples(ctx, (uint64_t)dur);
-                ev.vol_override = vol_override;
-                list_push(list, &ev);
+                ev.vol_override = (cur_vol >= 0) ? cur_vol : vol_override;
+                if (!list_push(list, &ev)) {
+                    return false;
+                }
+                last_note = true;
+                last_start_step = *step;
+                last_end_step = *step + (uint64_t)dur;
                 *step += (uint64_t)dur;
                 break;
             }
         }
     }
+    return true;
 }
 
 /* Append a pattern reference's events to `list`, using `default_inst` when the
- * sequence item has no `:inst(...)` override. */
-static void expand_seq_item(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
+ * sequence item has no `:inst(...)` override. Returns false on allocation failure. */
+static bool expand_seq_item(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                             const bax_seq_item_t *item, const char *default_inst,
                             uint64_t *step) {
     const bax_pattern_t *pat = bax_song_find_pattern(ctx->song, item->pattern_name);
     if (!pat) {
-        return;
+        return true;
     }
     const char *inst = item->inst_override[0] ? item->inst_override : default_inst;
-    expand_pattern(ctx, list, pat, inst, item->oct_offset, item->vol_override, step);
+    return expand_pattern(ctx, list, pat, inst, item->oct_offset, item->vol_override, step);
 }
 
-/* Expand a channel's ref list (sequence names or pattern names) into events. */
-static void expand_channel(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
+/* Expand a channel's ref list (sequence names or pattern names) into events.
+ * Returns false on allocation failure. */
+static bool expand_channel(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                            const bax_channel_t *ch) {
     uint64_t step = 0;
     for (size_t r = 0; r < ch->ref_count; r++) {
@@ -201,15 +248,20 @@ static void expand_channel(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
         const bax_sequence_t *seq = bax_song_find_sequence(ctx->song, ref);
         if (seq) {
             for (size_t i = 0; i < seq->item_count; i++) {
-                expand_seq_item(ctx, list, &seq->items[i], ch->default_inst, &step);
+                if (!expand_seq_item(ctx, list, &seq->items[i], ch->default_inst, &step)) {
+                    return false;
+                }
             }
         } else {
             const bax_pattern_t *pat = bax_song_find_pattern(ctx->song, ref);
             if (pat) {
-                expand_pattern(ctx, list, pat, ch->default_inst, 0, -1, &step);
+                if (!expand_pattern(ctx, list, pat, ch->default_inst, 0, -1, &step)) {
+                    return false;
+                }
             }
         }
     }
+    return true;
 }
 
 /* Split "a|b|c|d" into four instrument names (Beginner Mode channel auto). */
@@ -240,7 +292,7 @@ static void split_auto_inst(const char *s, char insts[4][BAX_MAX_NAME_LEN]) {
  * standard Game Boy role order (mel/harm/bass/perc). Each role's section part
  * becomes a synthetic per-channel timeline of pattern references.
  */
-static void expand_channel_auto(gb_expand_ctx_t *ctx, gb_ev_list_t lists[BAX_MAX_CHANNELS],
+static bool expand_channel_auto(gb_expand_ctx_t *ctx, gb_ev_list_t lists[BAX_MAX_CHANNELS],
                                 const bax_song_t *song) {
     static const char *const roles[BAX_MAX_CHANNELS] = { "mel", "harm", "bass", "perc" };
     char insts[4][BAX_MAX_NAME_LEN];
@@ -248,7 +300,7 @@ static void expand_channel_auto(gb_expand_ctx_t *ctx, gb_ev_list_t lists[BAX_MAX
 
     const bax_form_t *form = bax_song_find_form(song, song->auto_form_name);
     if (!form) {
-        return;
+        return true;
     }
 
     uint64_t step[BAX_MAX_CHANNELS] = { 0, 0, 0, 0 };
@@ -266,12 +318,15 @@ static void expand_channel_auto(gb_expand_ctx_t *ctx, gb_ev_list_t lists[BAX_MAX
                 for (size_t pn = 0; pn < part->pattern_count; pn++) {
                     const bax_pattern_t *pat = bax_song_find_pattern(song, part->patterns[pn]);
                     if (pat) {
-                        expand_pattern(ctx, &lists[r], pat, insts[r], 0, -1, &step[r]);
+                        if (!expand_pattern(ctx, &lists[r], pat, insts[r], 0, -1, &step[r])) {
+                            return false;
+                        }
                     }
                 }
             }
         }
     }
+    return true;
 }
 
 bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
@@ -301,16 +356,26 @@ bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
     memset(lists, 0, sizeof(lists));
 
     uint64_t max_step = 0;
+    bool ok = true;
     if (song->channel_auto_form) {
-        expand_channel_auto(&ctx, lists, song);
+        ok = expand_channel_auto(&ctx, lists, song);
     } else {
-        for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
+        for (int c = 0; c < BAX_MAX_CHANNELS && ok; c++) {
             const bax_channel_t *ch = &song->channels[c];
             if (ch->ref_count == 0) {
                 continue;
             }
-            expand_channel(&ctx, &lists[c], ch);
+            ok = expand_channel(&ctx, &lists[c], ch);
         }
+    }
+    if (!ok) {
+        for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
+            free(lists[c].items);
+        }
+        if (errbuf && errbuf_len) {
+            snprintf(errbuf, errbuf_len, "out of memory");
+        }
+        return false;
     }
     for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
         for (size_t i = 0; i < lists[c].count; i++) {
@@ -419,16 +484,10 @@ bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
             }
 
             gb_render_note_full(scratch, len, song, midi, inst, ev->effect,
-                                sample_rate, &state, c);
+                                sample_rate, ev->vol_override, &state, c);
 
             for (uint32_t s = 0; s < len; s++) {
-                int32_t v = mix[ev->start_sample + s] + scratch[s];
-                if (v > 32767) {
-                    v = 32767;
-                } else if (v < -32768) {
-                    v = -32768;
-                }
-                mix[ev->start_sample + s] = v;
+                mix[ev->start_sample + s] += scratch[s];
             }
         }
     }
@@ -436,6 +495,21 @@ bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
     free(scratch);
     for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
         free(lists[c].items);
+    }
+
+    /* Find the complete mix's peak before any 16-bit conversion, then apply the
+     * 0.95 peak-limit (PLAYBACK_PEAK_CEILING) and clamp on the final convert. */
+    int64_t peak = 0;
+    for (size_t s = 0; s < total; s++) {
+        int32_t v = mix[s];
+        int64_t a = v < 0 ? -(int64_t)v : (int64_t)v;
+        if (a > peak) {
+            peak = a;
+        }
+    }
+    int32_t scale = 0;
+    if (peak > 31130) {
+        scale = (int32_t)(((uint64_t)31130u << 15) / (uint64_t)peak);
     }
 
     gb_sample_t *out = (gb_sample_t *)malloc(total * sizeof(gb_sample_t));
@@ -447,25 +521,18 @@ bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
         return false;
     }
     for (size_t s = 0; s < total; s++) {
-        out[s] = (gb_sample_t)mix[s];
+        int32_t v = mix[s];
+        if (scale != 0) {
+            v = (int32_t)(((int64_t)v * scale) >> 15);
+        }
+        if (v > 32767) {
+            v = 32767;
+        } else if (v < -32768) {
+            v = -32768;
+        }
+        out[s] = (gb_sample_t)v;
     }
     free(mix);
-
-    /* Peak-limit to 0.95 (PLAYBACK_PEAK_CEILING), matching BeatBax's
-     * normalizeBuffer(buffer, false): scale down only if clipping. */
-    int peak = 0;
-    for (size_t s = 0; s < total; s++) {
-        int a = out[s] < 0 ? -out[s] : out[s];
-        if (a > peak) {
-            peak = a;
-        }
-    }
-    if (peak > 31130) {
-        int32_t scale = (int32_t)(((uint64_t)31130u << 15) / (uint64_t)peak);
-        for (size_t s = 0; s < total; s++) {
-            out[s] = (gb_sample_t)(((int32_t)out[s] * scale) >> 15);
-        }
-    }
 
     *out_mono = out;
     *out_len = total;

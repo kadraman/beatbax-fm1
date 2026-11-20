@@ -37,11 +37,12 @@ void gb_channel_state_init(gb_channel_state_t *st);
  * Render one note (mono, overwrites `dst[0..len)`) with software macros
  * (vol_env/pitch_env/duty_env/arp_env) and named effects (vib/arp/port).
  * `effect_name` may be "" for no named effect. `midi` is the resolved note.
+ * `vol_override` is a 0..15 volume gain, or -1 for none.
  */
 void gb_render_note_full(gb_sample_t *dst, uint32_t len,
                          const bax_song_t *song, int midi,
                          const bax_instrument_t *inst, const char *effect_name,
-                         uint32_t sample_rate,
+                         uint32_t sample_rate, int vol_override,
                          gb_channel_state_t *state, int channel);
 
 #ifdef __cplusplus
