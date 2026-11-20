@@ -6,7 +6,7 @@ Next available feature number: **008**
 
 | ID | Slug | Status | Area | Issue | Summary |
 |----|------|--------|------|-------|---------|
-| 003 | [gameboy-renderer](features/003-gameboy-renderer/) | planned | audio | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | Fixed-point Game Boy voices; CLI comparison |
+| 003 | [gameboy-renderer](features/003-gameboy-renderer/) | in-progress | audio | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | Fixed-point Game Boy voices; CLI comparison |
 | 004 | [device-player](features/004-device-player/) | draft | firmware | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | Play fixture from flash on FM-1 |
 | 005 | [graphical-composer](features/005-graphical-composer/) | draft | ui | [#5](https://github.com/kadraman/beatbax-fm1/issues/5) | Song / Pattern / Chain / Instrument / Mix screens |
 | 006 | [store-usb-transfer](features/006-store-usb-transfer/) | draft | firmware | [#6](https://github.com/kadraman/beatbax-fm1/issues/6) | Flash store + host USB transfer of `.bax` |

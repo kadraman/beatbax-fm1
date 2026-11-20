@@ -2,10 +2,10 @@
 title: "Game Boy renderer on the host"
 id: 3
 slug: "gameboy-renderer"
-status: planned
+status: in-progress
 authors: ["kadraman"]
 created: 2026-11-11
-updated: 2026-11-19
+updated: 2026-11-20
 issue: "https://github.com/kadraman/beatbax-fm1/issues/3"
 area: audio
 ---
