@@ -21,12 +21,21 @@
 #include "gb_tables.h"
 #include "gb_voice.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 /* Q16 fixed-point helpers. */
 static int32_t q16_mul(int32_t a, int32_t b) {
     return (int32_t)(((int64_t)a * (int64_t)b) >> 16);
+}
+
+/* 2^(semi_q16 / 2^16 / 12) in Q16, direct lookup in the fine table. */
+static int32_t pow2_semi_q16(int32_t semi_q16) {
+    int32_t idx = (semi_q16 >> 8) + GB_POW2_FINE_OFFSET;
+    if (idx < 0) idx = 0;
+    if (idx >= GB_POW2_FINE_COUNT) idx = GB_POW2_FINE_COUNT - 1;
+    return gb_pow2_fine_q16[idx];
 }
 
 /* Tile the wave table (16 or 32 nibbles) to 32 and return the integer sum. */
@@ -81,6 +90,10 @@ typedef struct {
     int arp_semis[4];
     int arp_count;
     int port_speed;
+    int bend_semi;
+    int bend_delay_ms; /* -1 = default (50% of note) */
+    int bend_time_ms;  /* -1 = default (remaining) */
+    char bend_curve[8];
 } gb_fx_t;
 
 /* Parse arp offsets from a `bax_effect_t`. Root (0) is prepended, matching
@@ -105,6 +118,39 @@ static void resolve_arp(const bax_effect_t *eff, gb_fx_t *fx) {
     }
 }
 
+/* Parse "bend:semitones[,curve[,delay[,time]]]" (delay/time in seconds). */
+static void resolve_bend(const bax_effect_t *eff, gb_fx_t *fx) {
+    fx->bend_delay_ms = -1;
+    fx->bend_time_ms = -1;
+    snprintf(fx->bend_curve, sizeof(fx->bend_curve), "linear");
+    const char *colon = strchr(eff->raw_expr, ':');
+    if (!colon) {
+        return;
+    }
+    const char *p = colon + 1;
+    fx->bend_semi = (int)strtol(p, NULL, 10);
+    const char *c1 = strchr(p, ',');
+    if (!c1) {
+        return;
+    }
+    p = c1 + 1;
+    const char *c2 = strchr(p, ',');
+    size_t n = c2 ? (size_t)(c2 - p) : strlen(p);
+    if (n >= sizeof(fx->bend_curve)) {
+        n = sizeof(fx->bend_curve) - 1;
+    }
+    memcpy(fx->bend_curve, p, n);
+    fx->bend_curve[n] = '\0';
+    if (c2) {
+        p = c2 + 1;
+        fx->bend_delay_ms = (int)(atof(p) * 1000.0);
+        const char *c3 = strchr(p, ',');
+        if (c3) {
+            fx->bend_time_ms = (int)(atof(c3 + 1) * 1000.0);
+        }
+    }
+}
+
 static void resolve_fx(const bax_song_t *song, const char *effect_name, gb_fx_t *fx) {
     memset(fx, 0, sizeof(*fx));
     if (!effect_name || !effect_name[0]) {
@@ -125,6 +171,9 @@ static void resolve_fx(const bax_song_t *song, const char *effect_name, gb_fx_t 
             break;
         case BAX_EFFECT_PORTAMENTO:
             fx->port_speed = eff->params.port.speed;
+            break;
+        case BAX_EFFECT_BEND:
+            resolve_bend(eff, fx);
             break;
         default:
             break;
@@ -207,6 +256,18 @@ static void render_pulse_full(gb_sample_t *dst, uint32_t len,
         if (port_dur_samples < 1) port_dur_samples = 1;
     }
 
+    int32_t bend_delay_samples = 0;
+    int32_t bend_time_samples = 0;
+    if (fx->bend_semi != 0) {
+        bend_delay_samples = (fx->bend_delay_ms >= 0)
+                                 ? (int32_t)((uint64_t)fx->bend_delay_ms * sample_rate / 1000u)
+                                 : (int32_t)len / 2;
+        bend_time_samples = (fx->bend_time_ms >= 0)
+                                ? (int32_t)((uint64_t)fx->bend_time_ms * sample_rate / 1000u)
+                                : (int32_t)len - bend_delay_samples;
+        if (bend_time_samples < 1) bend_time_samples = 1;
+    }
+
     for (uint32_t i = 0; i < len; i++) {
         if (prog.enabled) {
             const gb_tick_row_t *row = tick_row_at(&prog, &last_tick, i, sample_rate);
@@ -273,6 +334,26 @@ static void render_pulse_full(gb_sample_t *dst, uint32_t len,
                 if (idx >= GB_POW2_COUNT) idx = GB_POW2_COUNT - 1;
                 freq = q16_mul(freq, gb_pow2_q16[idx]);
             }
+        }
+
+        /* Pitch bend: freq *= 2^(semi * progress / 12) with curve shaping. */
+        if (fx->bend_semi != 0 && bend_time_samples > 0 &&
+            (int32_t)i >= bend_delay_samples &&
+            (int32_t)i <= bend_delay_samples + bend_time_samples) {
+            int32_t t_rel = (int32_t)i - bend_delay_samples;
+            uint32_t p = (uint32_t)(((uint64_t)t_rel << 16) / (uint64_t)bend_time_samples);
+            if (p > 65536) p = 65536;
+            if (strcmp(fx->bend_curve, "exp") == 0 || strcmp(fx->bend_curve, "exponential") == 0) {
+                p = (uint32_t)(((uint64_t)p * p) >> 16);
+            } else if (strcmp(fx->bend_curve, "log") == 0 || strcmp(fx->bend_curve, "logarithmic") == 0) {
+                uint32_t q = 65536u - p;
+                p = 65536u - (uint32_t)(((uint64_t)q * q) >> 16);
+            } else if (strcmp(fx->bend_curve, "sine") == 0 || strcmp(fx->bend_curve, "sin") == 0) {
+                uint32_t sp = (uint32_t)(((uint64_t)p * p >> 16) * (3u * 65536u - 2u * p) >> 16);
+                p = sp;
+            }
+            int32_t semi_q16 = (int32_t)((int64_t)fx->bend_semi * (int64_t)p);
+            freq = q16_mul(freq, pow2_semi_q16(semi_q16));
         }
 
         uint32_t inc = freq_q16_to_inc(freq, sample_rate);
@@ -359,8 +440,9 @@ static void render_wave_full(gb_sample_t *dst, uint32_t len,
             freq = last_freq + (int32_t)(((int64_t)(freq - last_freq) * (int64_t)eased) >> 16);
         }
 
-        uint32_t inc = freq_q16_to_inc(freq, sample_rate);
-        phase += inc;
+        /* BeatBax computes wave phase directly: phase = (t * effFreq) % 1. */
+        uint64_t ph = (uint64_t)i * (uint64_t)freq * 65536ull / (uint64_t)sample_rate;
+        phase = (gb_phase_t)(ph & 0xFFFFFFFFull);
         int16_t v = gb_wave_sample_q15(table, sum, vol_div, phase);
         int16_t sample = v;
         if (use_prog_vol) {

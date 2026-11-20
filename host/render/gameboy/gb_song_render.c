@@ -58,6 +58,10 @@ static uint32_t step_to_sample(const gb_expand_ctx_t *c, uint64_t step) {
     return (uint32_t)((step * 15ull * (uint64_t)c->sample_rate) / (uint64_t)c->bpm);
 }
 
+static uint32_t dur_to_samples(const gb_expand_ctx_t *c, uint64_t steps) {
+    return (uint32_t)((steps * 15ull * (uint64_t)c->sample_rate) / (uint64_t)c->bpm);
+}
+
 static void list_push(gb_ev_list_t *list, const gb_ev_t *ev) {
     if (list->count >= list->cap) {
         size_t ncap = list->cap ? list->cap * 2 : 64;
@@ -165,7 +169,7 @@ static void expand_pattern(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
                 snprintf(ev.inst, sizeof(ev.inst), "%s", cur_inst);
                 snprintf(ev.effect, sizeof(ev.effect), "%s", t->effect_name);
                 ev.start_sample = step_to_sample(ctx, *step);
-                ev.len_samples = step_to_sample(ctx, *step + (uint64_t)dur) - ev.start_sample;
+                ev.len_samples = dur_to_samples(ctx, (uint64_t)dur);
                 ev.vol_override = vol_override;
                 list_push(list, &ev);
                 *step += (uint64_t)dur;
@@ -208,6 +212,68 @@ static void expand_channel(gb_expand_ctx_t *ctx, gb_ev_list_t *list,
     }
 }
 
+/* Split "a|b|c|d" into four instrument names (Beginner Mode channel auto). */
+static void split_auto_inst(const char *s, char insts[4][BAX_MAX_NAME_LEN]) {
+    for (int i = 0; i < 4; i++) {
+        insts[i][0] = '\0';
+    }
+    int idx = 0;
+    const char *p = s;
+    while (*p && idx < 4) {
+        const char *pipe = strchr(p, '|');
+        size_t n = pipe ? (size_t)(pipe - p) : strlen(p);
+        if (n >= BAX_MAX_NAME_LEN) {
+            n = BAX_MAX_NAME_LEN - 1;
+        }
+        memcpy(insts[idx], p, n);
+        insts[idx][n] = '\0';
+        idx++;
+        if (!pipe) {
+            break;
+        }
+        p = pipe + 1;
+    }
+}
+
+/*
+ * Expand `channel auto form <name> inst=a|b|c|d` into four channels, using the
+ * standard Game Boy role order (mel/harm/bass/perc). Each role's section part
+ * becomes a synthetic per-channel timeline of pattern references.
+ */
+static void expand_channel_auto(gb_expand_ctx_t *ctx, gb_ev_list_t lists[BAX_MAX_CHANNELS],
+                                const bax_song_t *song) {
+    static const char *const roles[BAX_MAX_CHANNELS] = { "mel", "harm", "bass", "perc" };
+    char insts[4][BAX_MAX_NAME_LEN];
+    split_auto_inst(song->auto_form_inst, insts);
+
+    const bax_form_t *form = bax_song_find_form(song, song->auto_form_name);
+    if (!form) {
+        return;
+    }
+
+    uint64_t step[BAX_MAX_CHANNELS] = { 0, 0, 0, 0 };
+    for (size_t si = 0; si < form->section_count; si++) {
+        const bax_section_t *sec = bax_song_find_section(song, form->section_names[si]);
+        if (!sec) {
+            continue;
+        }
+        for (int r = 0; r < BAX_MAX_CHANNELS; r++) {
+            for (size_t pi = 0; pi < sec->part_count; pi++) {
+                const bax_section_part_t *part = &sec->parts[pi];
+                if (strcmp(part->part_name, roles[r]) != 0) {
+                    continue;
+                }
+                for (size_t pn = 0; pn < part->pattern_count; pn++) {
+                    const bax_pattern_t *pat = bax_song_find_pattern(song, part->patterns[pn]);
+                    if (pat) {
+                        expand_pattern(ctx, &lists[r], pat, insts[r], 0, -1, &step[r]);
+                    }
+                }
+            }
+        }
+    }
+}
+
 bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
                          gb_sample_t **out_mono, size_t *out_len,
                          char *errbuf, size_t errbuf_len) {
@@ -234,12 +300,18 @@ bool gb_song_render_mono(const bax_song_t *song, uint32_t sample_rate,
     memset(lists, 0, sizeof(lists));
 
     uint64_t max_step = 0;
-    for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
-        const bax_channel_t *ch = &song->channels[c];
-        if (ch->ref_count == 0) {
-            continue;
+    if (song->channel_auto_form) {
+        expand_channel_auto(&ctx, lists, song);
+    } else {
+        for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
+            const bax_channel_t *ch = &song->channels[c];
+            if (ch->ref_count == 0) {
+                continue;
+            }
+            expand_channel(&ctx, &lists[c], ch);
         }
-        expand_channel(&ctx, &lists[c], ch);
+    }
+    for (int c = 0; c < BAX_MAX_CHANNELS; c++) {
         for (size_t i = 0; i < lists[c].count; i++) {
             uint64_t end_sample = (uint64_t)lists[c].items[i].start_sample +
                                   lists[c].items[i].len_samples;

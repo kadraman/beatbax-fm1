@@ -71,6 +71,7 @@ int main(void) {
     test_render_fixture("songs/gameboy/tutorial_groove.bax", 100000);
     test_render_fixture("songs/gameboy/gb_sweep_demo.bax", 100000);
     test_render_fixture("songs/gameboy/gb_uge_note_demo.bax", 50000);
+    test_render_fixture("songs/gameboy/grassland_dash.bax", 500000);
     printf("\nAll song render tests passed successfully!\n");
     return 0;
 }
