@@ -16,7 +16,9 @@ host/tests/render/test_render_silence
 host/tests/render/test_voice
 host/tests/render/test_render_note
 host/tests/render/test_song_render
+host/tests/render/test_stream
 tools/render-bax
+tools/embed-bax
 .cmp-tmp/
 out.wav
 

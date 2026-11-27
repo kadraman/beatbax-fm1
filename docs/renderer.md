@@ -20,6 +20,14 @@ The comparison harness renders **both sides at 44100 Hz** and compares
 sample-for-sample — no resampling. This avoids the WAV header's integer-rate
 limitation (a `-r 44117.6` request stores `44117` in the header).
 
+**Feature 004 device rate.** The renderer's `sample_rate` is a `uint32`, so the
+device path uses the nearest integer **44118 Hz** (`GB_RENDER_DEVICE_RATE`);
+the true codec rate is 24 MHz / 544 = 44117.647… Hz. The compiled song blob is
+baked at 44118 Hz and carries the 0.95 peak-limit scale computed by the offline
+renderer at that rate, so the device streamer is sample-identical to the host
+render of the same fixture at 44118 Hz (verified by `make test-render`'s stream
+test).
+
 ## Reference commands (BeatBax CLI 0.6.1)
 
 ```text
@@ -58,6 +66,33 @@ make test-compare    # render fixtures + compare to BeatBax CLI (>= 0.95)
 `tools/render-bax`, exports the reference with `beatbax export wav`, and checks the
 normalized correlation over the trimmed non-silent region against the 0.95 gate.
 
+## Spec-112 parity update (2026-11-23)
+
+The renderer now matches BeatBax's **spec-112 WAV/Desktop parity** semantics (the
+`beatbax.main` working tree at `a34cdac1`), not the 0.6.1 CLI. Changes — see
+[`specs/complete/004-device-player/plan.md`](../specs/complete/004-device-player/plan.md),
+section "Renderer fidelity update":
+
+- **Wave output scale** ×0.54 (`0.9` buffer fill × `0.6` playback gain).
+- **GB envelope** linearly interpolates between steps (was discrete stepping).
+- **Release tails**: 5 ms linear (pulse/noise); 20 ms exponential (`setTargetAtTime`
+  shape) for a wave without a GB envelope.
+- **Portamento curve**: exponential/geometric (pulse), linear Hz (wave) — was smoothstep.
+- **Effect order**: port → arp → bend → vib, with vibrato additive and keyed off the
+  un-arpeggiated base frequency.
+- **Pulse portamento voice-holding**: contiguous `port` runs share one oscillator
+  (`join`/`hold` flags, flat envelope, no mid-run fade); a normal pulse note resets its
+  oscillator phase to 0 (`continuePhase = legato || portJoin`).
+
+**Chromium 440 Hz startup** (`d3807ca6`) is **replicated**: a new pulse voice plays (and
+advances phase at) 440 Hz for the leading `min(start%128, 128 − start%128)` samples,
+matching Chromium's OscillatorNode. **Accepted residual** — the parity renderer uses a
+band-limited pulse (Fourier series + `2·duty−1` DC), while this renderer keeps a naive
+±1 square; the correlation cost is ~2% (single notes ≈ 0.98).
+
+The correlation figures below were measured against CLI **0.6.1** (pre-parity) and must
+be re-measured against the new CLI (`make test-compare`).
+
 ## Measured results (BeatBax CLI 0.6.1, 44100 Hz)
 
 | Fixture | Correlation |
@@ -65,6 +100,17 @@ normalized correlation over the trimmed non-silent region against the 0.95 gate.
 | `tutorial_groove.bax` | 0.970 |
 | `gb_sweep_demo.bax` | 1.000 |
 | `gb_uge_note_demo.bax` | 1.000 |
+
+## Measured results (spec-112 parity CLI, 44100 Hz)
+
+| Fixture | Correlation |
+|---------|-------------|
+| `tutorial_groove.bax` | 0.958 |
+| `gb_sweep_demo.bax` | 0.989 |
+| `gb_uge_note_demo.bax` | 0.951 |
+
+The residual (~2%) is the band-limited pulse (naive ±1 square vs Fourier-series pulse),
+an accepted difference; see "Spec-112 parity update" above.
 
 `grassland_dash.bax` renders with exact note timing and length but ~0.55
 correlation. Per-channel isolation (`render-bax -c N`) shows the drift is

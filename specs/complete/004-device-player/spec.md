@@ -2,10 +2,10 @@
 title: "Device player"
 id: 4
 slug: "device-player"
-status: draft
+status: complete
 authors: ["kadraman"]
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-27
 issue: "https://github.com/kadraman/beatbax-fm1/issues/4"
 area: firmware
 ---
@@ -80,10 +80,10 @@ Host rendering does not prove the FM-1 audio budget, flash XIP constraints, or p
 - Features 001 and 003 are at least `planned`; implementation gated per specs/README.
 - Felucca pin from 001 remains in force.
 
-## Open questions
+## Resolved questions
 
-- Embed fixture in `app.bin` vs tiny flash partition — plan picks embed for 004 simplicity.
-- Whether USB MIDI clock is ignored until 007.
+- **Embed** the fixture in the app image for 004 (no tiny flash partition yet); a song store is feature 006.
+- USB MIDI clock is **ignored** until feature 007 (live play/record).
 
 ## References
 

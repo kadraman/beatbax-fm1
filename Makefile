@@ -19,7 +19,7 @@ CFLAGS   ?= -std=c99 -Wall -Wextra -Ihost/song
 
 APP_DIR  := firmware/app
 BUILD    := $(APP_DIR)/build
-NAME     := beatbax-fm1-001
+NAME     := beatbax-fm1-004
 PRODUCT  := FM-1_1001
 BIN      := $(BUILD)/$(NAME).bin
 FWSC     := $(BUILD)/$(NAME).fwsc
@@ -29,7 +29,7 @@ export AC79_SDK        ?= $(HOME)/.jieli/ac79-sdk
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all clean build package test test-host test-unit test-coverage test-render test-compare render-bax
+.PHONY: help all clean build package test test-host test-unit test-coverage test-render test-compare render-bax embed-bax embed check-usb
 
 help:
 	@echo "BeatBax FM-1 (firmware & host tooling)"
@@ -39,6 +39,7 @@ help:
 	@echo "  make test-unit   compile and run C song-model unit & idempotence tests"
 	@echo "  make test-render compile and run C Game Boy renderer unit tests"
 	@echo "  make test-compare render fixtures and compare to BeatBax CLI"
+	@echo "  make check-usb   verify a connected FM-1 enumerates as USB MIDI (checklist-004 row 16)"
 	@echo ""
 	@echo "Firmware targets (WSL/Linux with JieLi toolchain):"
 	@echo "  make build       compile $(NAME).bin"
@@ -79,7 +80,8 @@ test-render:
 		host/song/song_model.c host/song/song_parse.c \
 		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
 		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
-		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_song_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_note_desc.c \
+		host/render/gameboy/gb_expand.c host/render/gameboy/gb_song_render.c \
 		host/tests/render/test_song_render.c -o host/tests/render/test_song_render
 	./host/tests/render/test_song_render
 	$(CC) $(CFLAGS) -Ihost/render/gameboy \
@@ -88,6 +90,15 @@ test-render:
 		host/render/gameboy/gb_render.c \
 		host/tests/render/test_render_silence.c -o host/tests/render/test_render_silence
 	./host/tests/render/test_render_silence
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_note_desc.c \
+		host/render/gameboy/gb_expand.c host/render/gameboy/gb_song_render.c \
+		host/render/gameboy/gb_embed.c host/render/gameboy/gb_stream.c \
+		host/tests/render/test_stream.c -o host/tests/render/test_stream
+	./host/tests/render/test_stream
 
 test: test-host test-coverage test-render test-compare
 
@@ -98,12 +109,31 @@ render-bax:
 		host/song/song_model.c host/song/song_parse.c \
 		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
 		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
-		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_song_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_note_desc.c \
+		host/render/gameboy/gb_expand.c host/render/gameboy/gb_song_render.c \
 		tools/render-bax.c -o tools/render-bax
 
 # Feature 003 Phase 2: render + compare fixtures against the BeatBax CLI oracle.
 test-compare: render-bax
 	$(PYTHON) tools/run-compare.py
+
+# Feature 004: compile a .bax into the firmware song blob header.
+embed-bax:
+	$(CC) $(CFLAGS) -Ihost/render/gameboy \
+		host/song/song_model.c host/song/song_parse.c \
+		host/render/gameboy/gb_period.c host/render/gameboy/gb_voice.c \
+		host/render/gameboy/gb_macro.c host/render/gameboy/gb_render.c \
+		host/render/gameboy/gb_note_render.c host/render/gameboy/gb_note_desc.c \
+		host/render/gameboy/gb_expand.c host/render/gameboy/gb_song_render.c \
+		host/render/gameboy/gb_embed.c host/render/gameboy/gb_stream.c \
+		tools/embed-bax.c -o tools/embed-bax
+
+embed: embed-bax
+	./tools/embed-bax songs/gameboy/grassland_dash.bax 44118 firmware/app/gb_song_embed.h
+
+# Feature 004: verify a connected FM-1 enumerates as USB MIDI (checklist-004 row 16).
+check-usb:
+	$(PYTHON) tools/check-usb-midi.py
 
 # --- Firmware targets (WSL/Linux) ---
 
