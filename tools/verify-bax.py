@@ -16,7 +16,8 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 def run_cmd(cmd, cwd=REPO_ROOT):
     print(f">> Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
     use_shell = True if os.name == "nt" else isinstance(cmd, str)
-    res = subprocess.run(cmd, cwd=cwd, shell=use_shell, capture_output=True, text=True)
+    res = subprocess.run(cmd, cwd=cwd, shell=use_shell, capture_output=True,
+                         text=True, encoding="utf-8", errors="replace")
     if res.stdout:
         print(res.stdout.strip())
     if res.returncode != 0:

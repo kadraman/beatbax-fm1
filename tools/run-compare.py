@@ -92,7 +92,8 @@ def correlation(a, b):
 
 def run(cmd):
     use_shell = os.name == "nt"
-    return subprocess.run(cmd, cwd=REPO_ROOT, shell=use_shell, capture_output=True, text=True)
+    return subprocess.run(cmd, cwd=REPO_ROOT, shell=use_shell, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
 
 
 def compare_fixture(fixture, render_bin, tmpdir, threshold):
