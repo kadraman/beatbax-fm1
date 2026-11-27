@@ -160,3 +160,27 @@ sweep (NR10, pulse 1); wave table + volume; noise width + note clock; software m
 `vol_env`/`pitch_env`/`duty_env`/`arp_env`; named effects `vib`/`arp`/`port`/`bend`.
 Out of scope for 003: NES/other chips, `trem`/`volSlide`/`cut`/`sweep` effect tokens
 (not in the 002-documented named-effect surface), on-device integration.
+
+## Erratum — superseded by spec-112 parity (2026-11-23)
+
+This file froze the pre-spec-112 BeatBax semantics (CLI 0.6.1). BeatBax's spec-112
+WAV/Desktop parity work (`bd57ae7d` … `a34cdac1` in `beatbax.main`) changed the
+authoritative `renderSongToPCM` semantics, and feature 004 updated the shared renderer
+to match. The following statements above are **stale**:
+
+- **§2 envelope** — `getEnvelopeValue` now linearly interpolates between GB volume
+  steps (matching `setValueCurveAtTime`), then holds the last level; not discrete steps.
+- **§3 wave** — the wave output is `((table − mean)/15) × 0.9 × 0.6 × volMul` (the
+  `WAVE_OUTPUT_SCALE = 0.9` buffer fill and `WAVE_PLAYBACK_GAIN = 0.6` were omitted here).
+- **§2/§4 release** — pulse/noise add a 5 ms linear release tail; a bare wave adds a
+  20 ms exponential tail (`setTargetAtTime` shape) past the nominal end.
+- **§6 port** — pulse portamento is exponential/geometric (`exponentialRampToValueAtTime`),
+  wave is linear Hz; the "smoothstep glide" is gone. Contiguous pulse `port` runs share
+  one oscillator (`join`/`hold`), and a normal pulse note resets its phase to 0
+  (`continuePhase = legato || portJoin`), where §9's "phase persists across notes" no
+  longer holds.
+- **§6 vib order** — `modulatePitchHz` applies port → arp → bend → vib, with vibrato
+  additive and keyed off the un-arpeggiated base frequency (not the glided frequency).
+
+See `docs/renderer.md` ("Spec-112 parity update") and
+`specs/complete/004-device-player/plan.md` for the authoritative current semantics.

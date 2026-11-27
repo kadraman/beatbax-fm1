@@ -153,6 +153,7 @@ bax_instrument_t *bax_song_add_instrument(bax_song_t *song, const char *name, ba
     inst->length = -1;
     inst->vol = -1;
     inst->gm = -1;
+    inst->wave_volume = 100; /* BeatBax defaults wave volume to 100% (NR32 full) */
     inst->vol_env.loop_point = -1;
     inst->pitch_env.loop_point = -1;
     inst->duty_env.loop_point = -1;

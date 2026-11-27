@@ -41,6 +41,15 @@ extern "C" {
 #define GB_RENDER_COMPARE_RATE 44100u
 
 /*
+ * Device codec rate as an integer (the physical rate is 24 MHz / 544 =
+ * 44117.647… Hz). The renderer is rate-parameterized with a uint32 rate, so
+ * feature 004 compiles/renders the fixture at this integer on both host and
+ * device; the sub-part-per-thousand error against the true codec rate is
+ * inaudible and irrelevant to the wall-clock playback driven by the codec IRQ.
+ */
+#define GB_RENDER_DEVICE_RATE 44118u
+
+/*
  * Block size mirroring the device callback shape (256 frames), so the same
  * API can be driven by the FM-1 codec path in feature 004.
  */

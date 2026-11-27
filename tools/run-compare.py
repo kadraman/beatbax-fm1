@@ -11,6 +11,7 @@ Usage: run-compare.py [--threshold T] [fixture ...]
 Defaults to the three shipped fixtures that define the SC-002 acceptance set.
 """
 import os
+import shlex
 import subprocess
 import sys
 import wave
@@ -18,10 +19,30 @@ import struct
 import math
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# The BeatBax CLI to compare against. Resolution order:
+#   1. $BEATBAX (explicit, e.g. "node /path/to/beatbax.main/bin/beatbax").
+#   2. A sibling beatbax.main source checkout (spec-112 parity branch), run via node.
+#   3. `beatbax` on PATH.
+# This keeps `make test` reproducible on both Windows and WSL: WSL's `beatbax` may be
+# the old 0.6.1 npm global, so prefer the source checkout when present.
+_PARITY_BIN = os.path.abspath(os.path.join(REPO_ROOT, "..", "beatbax.main", "bin", "beatbax"))
+_env = os.environ.get("BEATBAX")
+if _env:
+    BEATBAX = shlex.split(_env)
+elif os.path.exists(_PARITY_BIN):
+    BEATBAX = ["node", _PARITY_BIN]
+else:
+    BEATBAX = ["beatbax"]
 DEFAULT_FIXTURES = [
     "songs/gameboy/tutorial_groove.bax",
     "songs/gameboy/gb_sweep_demo.bax",
     "songs/gameboy/gb_uge_note_demo.bax",
+    "songs/gameboy/effects/gb_arpeggio_demo.bax",
+    "songs/gameboy/effects/gb_vibrato_demo.bax",
+    "songs/gameboy/effects/gb_sweep_demo.bax",
+    "songs/gameboy/effects/gb_bend_demo.bax",
+    "songs/gameboy/effects/gb_portamento_demo.bax",
 ]
 THRESHOLD = 0.95
 SAMPLE_RATE = 44100
@@ -82,7 +103,7 @@ def compare_fixture(fixture, render_bin, tmpdir, threshold):
     r1 = run([render_bin, fixture, fm1, str(SAMPLE_RATE)])
     if r1.returncode != 0:
         return ("ERROR", 0.0, r1.stderr.strip() or "render failed")
-    r2 = run(["beatbax", "export", "wav", fixture, "-o", ref])
+    r2 = run(BEATBAX + ["export", "wav", fixture, "-o", ref])
     if r2.returncode != 0:
         return ("ERROR", 0.0, r2.stderr.strip() or "beatbax export failed")
 

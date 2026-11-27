@@ -15,6 +15,7 @@
  */
 
 #include "gb_macro.h"
+#include "gb_fixed.h"
 #include <string.h>
 
 static const gb_tick_row_t HALT_ROW = { 0, 0, -1 }; /* volume 0 -> silent */
@@ -85,7 +86,7 @@ void gb_tick_program_build(const bax_instrument_t *inst, gb_tick_program_t *out)
     out->enabled = true;
 }
 
-const gb_tick_row_t *gb_tick_program_row(const gb_tick_program_t *p, int tick) {
+GB_RAMFN const gb_tick_row_t *gb_tick_program_row(const gb_tick_program_t *p, int tick) {
     if (!p || !p->enabled || p->count <= 0) {
         return NULL;
     }

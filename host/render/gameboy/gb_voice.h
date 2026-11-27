@@ -26,6 +26,19 @@
 extern "C" {
 #endif
 
+/*
+ * Note release tails (spec-112 parity). Pulse and noise fade with a short linear
+ * release; wave without a moving GB envelope uses a longer exponential tail
+ * (`setTargetAtTime` shape). See `gb_note_render.c`.
+ */
+#define GB_NOTE_RELEASE_MS 5u
+#define GB_WAVE_TAIL_MS 20u
+
+/* Round `ms` milliseconds to samples at `sample_rate` (half-up, like Math.round).
+ * A macro rather than a static inline so it never becomes an XIP function that a
+ * .ram_text caller would need a long jump to reach. */
+#define gb_ms_to_samples(ms, sample_rate) (((ms) * (sample_rate) + 500u) / 1000u)
+
 /* Envelope direction, matching the reference `parseEnvelope` ('down'/'up'/'flat'). */
 typedef enum {
     GB_ENV_DOWN = 0,
@@ -35,11 +48,13 @@ typedef enum {
 
 /*
  * Game Boy volume envelope gain in Q15 (0..32767) at sample index `t` within a
- * note. Linear: level steps ±1 per `period/64` s, clamped [0,15], starting at
- * `initial`. `period == 0` (or FLAT) returns the constant `initial/15`.
+ * note of length `dur` samples. Matches BeatBax getEnvelopeValue: the level
+ * steps ±1 per `period/64` s from `initial`, linearly interpolated between
+ * steps, then holds once it saturates at 0 (down) or 15 (up). `period == 0`
+ * (or FLAT) returns the constant `initial/15`.
  */
 int16_t gb_envelope_q15(uint8_t initial, gb_env_dir_t dir, uint8_t period,
-                        uint32_t t, uint32_t sample_rate);
+                        uint32_t t, uint32_t dur, uint32_t sample_rate);
 
 /*
  * Duty threshold (Q32) from a duty percentage in tenths (125 / 250 / 500 / 750).
@@ -49,6 +64,15 @@ uint32_t gb_duty_threshold(uint32_t duty_x10);
 
 /* Bipolar pulse square (±1, Q15 full-scale) at the given phase. */
 int16_t gb_pulse_bipolar(gb_phase_t phase, uint32_t duty_threshold);
+
+/*
+ * Band-limited pulse sample (Q15) at `phase` (Q32), matching BeatBax's Nyquist-
+ * capped Fourier series (pulseDc.ts). `duty_x10` is the duty in tenths
+ * (125/250/500/750); selects the precomputed waveform table. This is the pulse
+ * used by the fixed-point renderer (the ideal square above is only the Phase-0
+ * stub).
+ */
+int16_t gb_pulse_sample(gb_phase_t phase, uint32_t duty_x10);
 
 /*
  * Wave sample (Q15) at `phase` (Q32). `table` holds 32 4-bit nibbles; `sum` is

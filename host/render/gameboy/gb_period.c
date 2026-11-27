@@ -31,7 +31,7 @@ const uint16_t gb_period_table[GB_PERIOD_TABLE_LEN] = {
     1985, 1989, 1992, 1995, 1998, 2001, 2004, 2006, 2008, 2011, 2013, 2015
 };
 
-uint32_t gb_midi_to_period(int midi) {
+GB_RAMFN uint32_t gb_midi_to_period(int midi) {
     if (midi < 36) {
         return 0; /* below C2: lowest representable period */
     }
@@ -55,7 +55,7 @@ uint32_t gb_midi_to_period(int midi) {
     return (uint32_t)reg;
 }
 
-uint32_t gb_period_to_inc(uint32_t reg, uint32_t sample_rate) {
+GB_RAMFN uint32_t gb_period_to_inc(uint32_t reg, uint32_t sample_rate) {
     if (sample_rate == 0) {
         return 0;
     }
@@ -81,7 +81,7 @@ uint32_t gb_period_to_freq_hz(uint32_t reg) {
     return (131072u + period / 2u) / period;
 }
 
-int32_t gb_period_to_freq_q16(uint32_t reg) {
+GB_RAMFN int32_t gb_period_to_freq_q16(uint32_t reg) {
     uint32_t r = reg & 0x7FFu;
     uint32_t period = 2048u - r; /* 1..2048 */
     uint64_t q = ((uint64_t)131072u << 16) / period;

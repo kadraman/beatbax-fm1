@@ -59,8 +59,8 @@ static void test_wave_note(void) {
     gb_sample_t buf[64];
     gb_render_wave(buf, 64, inc, ramp, 240, 1, 44100);
 
-    /* First sample: phase ~0 -> index 0 (value 0) -> (0*32-240)*32767/480 = -16383. */
-    assert(buf[0] == -16383);
+    /* First sample: phase ~0 -> index 0 (value 0) -> (0*32-240)*32767*54/48000 = -8847. */
+    assert(buf[0] == -8847);
 
     bool saw_pos = false;
     for (int i = 0; i < 64; i++) {
