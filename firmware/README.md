@@ -16,6 +16,26 @@ Diagnostic image under [`app/`](app/):
 
 No CDC serial in this phase. No song model.
 
+## Feature 004 — device player
+
+`app/player.c` streams the embedded `grassland_dash.bax` fixture through the shared
+fixed-point Game Boy renderer ([`host/render/gameboy/`](../host/render/gameboy/)) in the
+audio callback. `app/gb_song_embed.h` is the **compiled song blob** (instruments, effects,
+events, baked peak scale) produced at build time — regenerate it with:
+
+```bash
+make embed   # runs tools/embed-bax on songs/gameboy/grassland_dash.bax at 44118 Hz
+```
+
+The device has no `.bax` parser, no heap allocator, and no float in the render path; it
+consumes the blob directly. PLAY toggles transport (stops at end); MASTER sets level.
+
+> **Shipped (feature 004 complete).** `beatbax-fm1-004.bin` links the renderer call graph
+> in `.ram_text` (SRAM, ~12.7 KB of the 24 KB budget) with a local `__udivdi3` in
+> `app/div64.c` (the pi32 toolchain has no 64-bit division helper). On-device callback
+> budget is 1409 µs (48.6% of the 2901 µs deadline). The hardware checklist is signed off
+> in [`../docs/hardware/checklist-004.md`](../docs/hardware/checklist-004.md).
+
 ## Prerequisites
 
 1. **Pinned HAL**
@@ -57,10 +77,25 @@ No CDC serial in this phase. No song model.
 export JIELI_TOOLCHAIN=~/.jieli/toolchain   # or your Windows/WSL path
 cd firmware/app
 sh build.sh
-# -> firmware/app/build/beatbax-fm1-001.bin
+# -> firmware/app/build/beatbax-fm1-004.bin
 sh build_loader.sh
 # -> firmware/app/build/ota.bin
 ```
+
+### Callback-budget debug build (checklist row 11)
+
+To read the on-device audio-callback cost directly on the panel, build with
+`GB_DEBUG_CAPTURE=1`:
+
+```bash
+cd firmware/app
+GB_DEBUG_CAPTURE=1 sh build.sh
+```
+
+The player screen then shows a `MAX … US` line: the worst-case `player_fill` time
+across the whole song, in microseconds (24 ticks/µs). The budget is **2901 µs**
+(half a 256-frame block). Record the steady-state `MAX` value after a full pass.
+The normal build (`sh build.sh`) omits this readout.
 
 ## Package and install
 
@@ -71,10 +106,10 @@ not been validated on hardware yet):
 export AC79_SDK="$HOME/.jieli/ac79-sdk"
 # ota lives at app/known-good/felucca-ota.bin (from felucca-1.7.0.fwsc)
 python3 pack_with_felucca_ota.py \
-  build/beatbax-fm1-001.bin build/beatbax-fm1-001.fwsc --product FM-1_1001
+  build/beatbax-fm1-004.bin build/beatbax-fm1-004.fwsc --product FM-1_1001
 ```
 
-Upload `build/beatbax-fm1-001.fwsc` with **M-Flasher**. On a first install from
+Upload `build/beatbax-fm1-004.fwsc` with **M-Flasher**. On a first install from
 stock, let M-Flasher install the bootloader (m-bootloader) too; it adds recovery
 by holding **REC** on reboot. See [`../docs/hardware/recovery.md`](../docs/hardware/recovery.md).
 Expect USB product `BeatBax FM-1`.
@@ -94,11 +129,18 @@ After install, the device enumerates as USB MIDI:
 | Product | `BeatBax FM-1` |
 | Package / OTA id | `FM-1_1001` |
 
+Verify from the host with `make check-usb` (runs `tools/check-usb-midi.py`): it lists
+the MIDI ports via `mido` when available, else falls back to Windows Plug-and-Play,
+and exits non-zero if `BeatBax FM-1` is absent.
+
 ## Tone and audio rules
 
-- Callback fills one half of a 128-frame stereo block with a Q23 square when `tone_on` is set.
-- The callback does **not** erase flash, draw the LCD, or wait on USB.
-- Measure callback cost on hardware before calling the phase complete (checklist).
+- The audio callback (`fm1_alnk0_irq` → `player_fill`) renders one half of a 128-frame
+  stereo block from the compiled song blob, then applies the MASTER Q15 gain.
+- The callback does **not** erase flash, draw the LCD, or wait on USB (T021).
+- Measure callback cost on hardware before calling the phase complete (checklist row 11).
+- For an on-device callback-budget readout, build with `GB_DEBUG_CAPTURE=1` and read the
+  `MAX … US` line on the player screen (see below).
 
 ## License
 

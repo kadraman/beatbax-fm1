@@ -8,7 +8,6 @@ See [../README.md](../README.md) for process and [../STATUS.md](../STATUS.md) fo
 
 | Folder | Title | Issue |
 |--------|-------|-------|
-| [004-device-player](004-device-player/) | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) |
 | [005-graphical-composer](005-graphical-composer/) | Graphical composer | [#5](https://github.com/kadraman/beatbax-fm1/issues/5) |
 | [006-store-usb-transfer](006-store-usb-transfer/) | Store and USB transfer | [#6](https://github.com/kadraman/beatbax-fm1/issues/6) |
 | [007-live-play-record](007-live-play-record/) | Live play and record | [#7](https://github.com/kadraman/beatbax-fm1/issues/7) |
