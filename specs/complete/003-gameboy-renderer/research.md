@@ -1,7 +1,7 @@
 # Research: BeatBax Game Boy (DMG-01) rendering semantics
 
 Reference for feature 003. Confirmed by reading the BeatBax engine source
-(`C:\Users\kadraman\repos\beatbax.main\packages\engine\src`, package `@beatbax/engine`,
+(`C:\Users\kadraman\repos\beatbax\packages\engine\src`, package `@beatbax/engine`,
 the compatibility oracle) and the installed CLI `beatbax` **0.6.1**.
 
 The WAV oracle is the **offline PCM renderer** (`audio/pcmRenderer.ts`), which is what
@@ -164,7 +164,7 @@ Out of scope for 003: NES/other chips, `trem`/`volSlide`/`cut`/`sweep` effect to
 ## Erratum — superseded by spec-112 parity (2026-11-23)
 
 This file froze the pre-spec-112 BeatBax semantics (CLI 0.6.1). BeatBax's spec-112
-WAV/Desktop parity work (`bd57ae7d` … `a34cdac1` in `beatbax.main`) changed the
+WAV/Desktop parity work (`bd57ae7d` … `a34cdac1` in `beatbax`) changed the
 authoritative `renderSongToPCM` semantics, and feature 004 updated the shared renderer
 to match. The following statements above are **stale**:
 

@@ -44,7 +44,7 @@ These answer the spec's open questions and close the design forks for 004:
 
 The shared renderer (`host/render/gameboy/`) was built against the pre-spec-112 BeatBax
 PCM renderer. BeatBax's parity work (`bd57ae7d` … `a34cdac1`, feature 112 in
-`beatbax.main`) changed the authoritative `renderSongToPCM` (WAV export / CLI play)
+`beatbax`) changed the authoritative `renderSongToPCM` (WAV export / CLI play)
 semantics. This section updates our float-free core to match, keeping bit-identity
 between the offline (`gb_song_render`) and streaming (`gb_stream`) paths and the baked
 peak-scale contract. Reference commits: `c6ccbe72` (release tails), `08b42b74`

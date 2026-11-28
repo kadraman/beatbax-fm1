@@ -69,7 +69,7 @@ normalized correlation over the trimmed non-silent region against the 0.95 gate.
 ## Spec-112 parity update (2026-11-23)
 
 The renderer now matches BeatBax's **spec-112 WAV/Desktop parity** semantics (the
-`beatbax.main` working tree at `a34cdac1`), not the 0.6.1 CLI. Changes — see
+`beatbax` working tree at `a34cdac1`), not the 0.6.1 CLI. Changes — see
 [`specs/complete/004-device-player/plan.md`](../specs/complete/004-device-player/plan.md),
 section "Renderer fidelity update":
 
