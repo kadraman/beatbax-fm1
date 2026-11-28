@@ -388,8 +388,12 @@ static GB_RAMFN void pulse_step(gb_note_t *n, gb_sample_t *dst, uint32_t count) 
         int32_t freq = base_for_mod;
 
         /* Portamento: exponential (geometric) glide from the previous note's
-         * frequency to the current (matches exponentialRampToValueAtTime). */
-        if (n->port_speed > 0 && last_freq > 0 && freq > 0 && freq != last_freq &&
+         * frequency to the current (matches exponentialRampToValueAtTime). The
+         * glide position advances on every in-duration sample even when a tick
+         * offset makes the target momentarily equal the previous note's pitch,
+         * so the ramp still completes on schedule rather than freezing and then
+         * jumping. */
+        if (n->port_speed > 0 && last_freq > 0 && freq > 0 &&
             (int32_t)i <= n->port_dur_samples) {
             uint32_t p_q16 = n->port_p_q16;
             n->port_p_q16 += n->port_q;
@@ -399,17 +403,19 @@ static GB_RAMFN void pulse_step(gb_note_t *n, gb_sample_t *dst, uint32_t count) 
                 n->port_p_q16++;
             }
             n->port_rem = pr;
-            int32_t semi_diff_q16 = 12 * (gb_log2_q16((uint32_t)freq) - n->log2_last_q16);
-            int32_t semi_q16 = (int32_t)(((int64_t)semi_diff_q16 * (int64_t)p_q16) >> 16);
-            int octave = semi_q16 / (12 << 16);
-            int32_t frac_semi_q16 = semi_q16 - octave * (12 << 16);
-            int64_t f64 = (int64_t)q16_mul(last_freq, gb_pow2_semi_q16(frac_semi_q16));
-            if (octave >= 0) {
-                f64 <<= octave;
-            } else {
-                f64 >>= -octave;
+            if (freq != last_freq) {
+                int32_t semi_diff_q16 = 12 * (gb_log2_q16((uint32_t)freq) - n->log2_last_q16);
+                int32_t semi_q16 = (int32_t)(((int64_t)semi_diff_q16 * (int64_t)p_q16) >> 16);
+                int octave = semi_q16 / (12 << 16);
+                int32_t frac_semi_q16 = semi_q16 - octave * (12 << 16);
+                int64_t f64 = (int64_t)q16_mul(last_freq, gb_pow2_semi_q16(frac_semi_q16));
+                if (octave >= 0) {
+                    f64 <<= octave;
+                } else {
+                    f64 >>= -octave;
+                }
+                freq = (int32_t)f64;
             }
-            freq = (int32_t)f64;
         }
 
         /* Arpeggio: cycle offsets at 60 Hz. */

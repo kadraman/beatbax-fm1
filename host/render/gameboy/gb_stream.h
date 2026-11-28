@@ -124,7 +124,10 @@ typedef struct {
     gb_channel_state_t chan;
 } gb_stream_t;
 
-/* Validate a blob (magic/version/counts). Returns 0 on success, else an error code. */
+/* Validate a blob (magic/version/counts, and that no schedule point exceeds the
+ * active-note pool). Returns 0 on success, else an error code:
+ *   1 null blob, 2 bad magic, 3 bad version, 4 no instruments, 5 no events,
+ *   6 schedule exceeds the active-note pool. */
 int gb_stream_validate(const gb_song_blob_t *blob);
 
 /* Bind a stream to a blob and reset transport (stopped, at the start). */

@@ -124,7 +124,7 @@ static RAMFN void player_fill(int32_t *dst, uint32_t frames)
 
     int32_t gain = master_q15;
     for (uint32_t i = 0; i < frames; i++) {
-        int32_t s = (int32_t)mono[i] << 8; /* Q15 -> Q23 */
+        int32_t s = (int32_t)mono[i] * 256; /* Q15 -> Q23 (well-defined for negative samples) */
         s = (int32_t)(((int64_t)s * gain) >> 15);
         dst[i * 2u] = s;
         dst[i * 2u + 1u] = s;

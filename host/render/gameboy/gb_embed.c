@@ -148,6 +148,17 @@ bool gb_blob_build(const bax_song_t *song, uint32_t sample_rate,
     out->fx_count = (uint16_t)n_fx;
     out->events = events;
     out->event_count = (uint32_t)n_ev;
+
+    /* Refuse a schedule that would exhaust the streaming pool: the scheduler
+     * silently drops the extra notes, diverging from the offline renderer. */
+    if (gb_stream_validate(out) != 0) {
+        gb_blob_free(out);
+        if (errbuf && errbuf_len) {
+            snprintf(errbuf, errbuf_len, "schedule exceeds active-note pool");
+        }
+        return false;
+    }
+
     return true;
 }
 

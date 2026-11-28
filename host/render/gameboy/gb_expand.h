@@ -62,6 +62,9 @@ bool gb_song_resolve(const bax_song_t *song, uint32_t sample_rate,
 
 void gb_resolved_list_free(gb_resolved_list_t *list);
 
+/* Resolve a simple note string ("C4", "B#4", "Cb4") to a MIDI number, or -1. */
+int gb_note_str_to_midi(const char *s);
+
 #ifdef __cplusplus
 }
 #endif

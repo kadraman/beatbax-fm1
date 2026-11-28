@@ -145,6 +145,42 @@ static void test_stop_reset_replay(const bax_song_t *song) {
     free(ref);
 }
 
+static void test_pool_exhaustion(void) {
+    printf("Testing active-note pool rejection...\n");
+
+    /* Nine notes starting together, each with a 5 ms release tail, would need
+     * more than the GB_STREAM_MAX_ACTIVE (8) pool slots. Validation must reject
+     * this instead of the scheduler silently dropping the ninth note. */
+    static gb_song_inst_t inst; /* zeroed -> voice = BAX_VOICE_PULSE1 (0) */
+    static gb_song_event_t events[GB_STREAM_MAX_ACTIVE + 1];
+    for (int i = 0; i < GB_STREAM_MAX_ACTIVE + 1; i++) {
+        events[i].start = 0;
+        events[i].len = 100;
+        events[i].midi = 60;
+        events[i].inst = 0;
+        events[i].fx = GB_BLOB_FX_NONE;
+        events[i].channel = (uint8_t)(i % BAX_MAX_CHANNELS);
+        events[i].join = 0;
+        events[i].hold = 0;
+        events[i].vol_override = -1;
+    }
+
+    gb_song_blob_t blob;
+    memset(&blob, 0, sizeof(blob));
+    blob.magic = GB_BLOB_MAGIC;
+    blob.version = GB_BLOB_VERSION;
+    blob.sample_rate = RATE;
+    blob.total_frames = 1000;
+    blob.name = "pool";
+    blob.insts = &inst;
+    blob.inst_count = 1;
+    blob.events = events;
+    blob.event_count = GB_STREAM_MAX_ACTIVE + 1;
+
+    assert(gb_stream_validate(&blob) == 6);
+    printf("  PASS: overlapping schedule rejected (pool exhausted)\n");
+}
+
 int main(void) {
     printf("Running BeatBax FM-1 Stream Render Tests (feature 004)...\n\n");
 
@@ -157,6 +193,7 @@ int main(void) {
 
     test_bit_identity_and_blocksize(&song);
     test_stop_reset_replay(&song);
+    test_pool_exhaustion();
 
     bax_song_free(&song);
     printf("\nAll stream render tests passed successfully!\n");

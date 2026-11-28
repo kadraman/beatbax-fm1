@@ -61,6 +61,37 @@ static GB_RAMFN void gb_desc_from_compiled(gb_note_desc_t *desc, const gb_song_i
     }
 }
 
+/* True if the tick program writes volume anywhere (mirrors the file-local
+ * prog_has_volume in the renderer). */
+static bool prog_has_volume(const gb_tick_program_t *p) {
+    for (int i = 0; i < p->count; i++) {
+        if (p->rows[i].vol >= 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Release-tail length for a compiled event, matching gb_note_begin_desc. */
+static uint32_t event_tail(const gb_song_blob_t *blob, uint32_t ev_idx) {
+    const gb_song_event_t *ev = &blob->events[ev_idx];
+    const gb_song_inst_t *inst = &blob->insts[ev->inst];
+    uint32_t sr = blob->sample_rate;
+    switch (inst->voice) {
+        case BAX_VOICE_PULSE1:
+        case BAX_VOICE_PULSE2:
+            return ev->hold ? 0u : gb_ms_to_samples(GB_NOTE_RELEASE_MS, sr);
+        case BAX_VOICE_NOISE:
+            return gb_ms_to_samples(GB_NOTE_RELEASE_MS, sr);
+        case BAX_VOICE_WAVE:
+            return (inst->env_period > 0 || (inst->prog.enabled && prog_has_volume(&inst->prog)))
+                       ? gb_ms_to_samples(GB_NOTE_RELEASE_MS, sr)
+                       : gb_ms_to_samples(GB_WAVE_TAIL_MS, sr);
+        default:
+            return 0;
+    }
+}
+
 int gb_stream_validate(const gb_song_blob_t *blob) {
     if (!blob) {
         return 1;
@@ -77,6 +108,29 @@ int gb_stream_validate(const gb_song_blob_t *blob) {
     if (!blob->events || blob->event_count == 0) {
         return 5;
     }
+
+    /* Reject schedules whose overlapping notes (including release tails) would
+     * exhaust the active-note pool: the scheduler would silently drop the extra
+     * notes and diverge from the offline renderer. */
+    uint32_t max_active = 0;
+    for (uint32_t i = 0; i < blob->event_count; i++) {
+        uint32_t t = blob->events[i].start;
+        uint32_t active = 0;
+        for (uint32_t j = 0; j < blob->event_count; j++) {
+            uint32_t js = blob->events[j].start;
+            uint32_t je = js + blob->events[j].len + event_tail(blob, j);
+            if (js <= t && t < je) {
+                active++;
+            }
+        }
+        if (active > max_active) {
+            max_active = active;
+        }
+    }
+    if (max_active > GB_STREAM_MAX_ACTIVE) {
+        return 6;
+    }
+
     return 0;
 }
 

@@ -85,8 +85,10 @@ static bool list_push(gb_ev_list_t *list, const gb_ev_t *ev) {
     return true;
 }
 
-/* Parse a simple note string ("C6", "C2", "D#4") into a MIDI number, or -1. */
-static int note_str_to_midi(const char *s) {
+/* Parse a simple note string ("C6", "C2", "D#4") into a MIDI number, or -1.
+ * The signed semitone is added to the octave base directly so accidentals that
+ * cross the octave boundary (B# -> next C, Cb -> previous B) resolve correctly. */
+int gb_note_str_to_midi(const char *s) {
     if (!s || !s[0]) {
         return -1;
     }
@@ -113,7 +115,7 @@ static int note_str_to_midi(const char *s) {
         return -1;
     }
     int octave = *p - '0';
-    return (octave + 1) * 12 + ((semi % 12) + 12) % 12;
+    return (octave + 1) * 12 + semi;
 }
 
 /*
@@ -510,7 +512,7 @@ bool gb_song_resolve(const bax_song_t *song, uint32_t sample_rate,
             }
             int midi = ev->midi;
             if (ev->kind == GB_EV_NAMED) {
-                midi = note_str_to_midi(inst->note);
+                midi = gb_note_str_to_midi(inst->note);
                 if (midi < 0 && inst->type != BAX_VOICE_NOISE) {
                     continue; /* melodic named hit with no default note */
                 }

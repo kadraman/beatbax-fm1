@@ -21,6 +21,7 @@
 
 #include "gb_song_render.h"
 #include "gb_note_render.h"
+#include "gb_expand.h"
 #include "song_parse.h"
 
 #include <assert.h>
@@ -346,6 +347,47 @@ static void test_vibrato(void) {
     printf("  PASS: vibrato modulates pitch\n");
 }
 
+static void test_note_resolution(void) {
+    printf("Testing accidental octave crossing...\n");
+    assert(gb_note_str_to_midi("C4") == 60);
+    assert(gb_note_str_to_midi("B4") == 71);
+    assert(gb_note_str_to_midi("B#4") == 72); /* crosses into C5 */
+    assert(gb_note_str_to_midi("Cb4") == 59); /* crosses into B3 */
+    assert(gb_note_str_to_midi("D#4") == 63);
+    assert(gb_note_str_to_midi("Eb4") == 63);
+    assert(gb_note_str_to_midi("C5") == 72);
+    printf("  PASS: accidental octave crossing\n");
+}
+
+static void test_portamento_equal_pitch_progress(void) {
+    printf("Testing portamento progress through an equal-pitch interval...\n");
+    /* When the portamento target equals the previous note's pitch, the glide
+     * position must still advance (so the ramp completes on schedule) rather
+     * than freezing and then jumping late. Drive a C4 portamento note whose
+     * target equals the previous channel frequency and check the position moved. */
+    gb_channel_state_t state;
+    gb_channel_state_init(&state);
+    state.last_freq_q16[0] = gb_period_to_freq_q16(gb_midi_to_period(60)); /* C4 */
+
+    gb_note_desc_t desc;
+    memset(&desc, 0, sizeof(desc));
+    desc.voice = BAX_VOICE_PULSE1;
+    desc.duty_x10 = 500;
+    desc.env_initial = 15;
+    desc.env_period = 0; /* flat */
+    desc.env_dir = GB_ENV_FLAT;
+    desc.port_speed = 16;
+
+    gb_note_t n;
+    gb_note_begin_desc(&n, &desc, 60, 5512, 44100, -1, &state, 0, false, false, 0);
+
+    gb_sample_t buf[128];
+    gb_note_step(&n, buf, sizeof(buf) / sizeof(buf[0]));
+    assert(n.port_p_q16 > 0); /* advanced through the equal-pitch interval */
+
+    printf("  PASS: portamento advances through equal-pitch interval\n");
+}
+
 int main(void) {
     printf("Running BeatBax FM-1 Song Render Tests (Phase 1)...\n\n");
     test_render_fixture("songs/gameboy/tutorial_groove.bax", 100000);
@@ -356,8 +398,10 @@ int main(void) {
     test_hold_sustain();
     test_temp_instrument_restore();
     test_log2();
+    test_note_resolution();
     test_portamento();
     test_portamento_run();
+    test_portamento_equal_pitch_progress();
     test_arp();
     test_bend();
     test_vibrato();
