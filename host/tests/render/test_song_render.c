@@ -359,6 +359,31 @@ static void test_note_resolution(void) {
     printf("  PASS: accidental octave crossing\n");
 }
 
+static void test_pattern_note_octave_crossing(void) {
+    printf("Testing pattern note accidental octave crossing...\n");
+    /* '#' starts a comment in .bax, so sharps are written as enharmonic flats.
+     * Cb4 must resolve to B3 (59) via octave crossing, and Db4 to 61. */
+    const char *src =
+        "chip gameboy\n"
+        "inst a type=pulse1 duty=50 env=gb:15,flat\n"
+        "pat p = C4 Cb4 Db4\n"
+        "channel 1 => inst a pat p\n";
+    bax_song_t song;
+    bax_error_t err;
+    assert(bax_song_parse(src, strlen(src), &song, &err));
+    gb_resolved_list_t list;
+    uint32_t total = 0;
+    char errbuf[256];
+    assert(gb_song_resolve(&song, 44100, &list, &total, errbuf, sizeof(errbuf)));
+    assert(list.count == 3);
+    assert(list.items[0].midi == 60); /* C4 */
+    assert(list.items[1].midi == 59); /* Cb4 -> B3 (octave crossing) */
+    assert(list.items[2].midi == 61); /* Db4 (normal flat) */
+    gb_resolved_list_free(&list);
+    bax_song_free(&song);
+    printf("  PASS: pattern note accidental octave crossing\n");
+}
+
 static void test_portamento_equal_pitch_progress(void) {
     printf("Testing portamento progress through an equal-pitch interval...\n");
     /* When the portamento target equals the previous note's pitch, the glide
@@ -399,6 +424,7 @@ int main(void) {
     test_temp_instrument_restore();
     test_log2();
     test_note_resolution();
+    test_pattern_note_octave_crossing();
     test_portamento();
     test_portamento_run();
     test_portamento_equal_pitch_progress();

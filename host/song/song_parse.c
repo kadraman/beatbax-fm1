@@ -543,8 +543,14 @@ static bool parse_pattern_token(const char *tok, bax_pat_token_t *ptok) {
 
         if (isdigit((unsigned char)*np)) {
             ptok->kind = BAX_TOKEN_NOTE;
-            ptok->octave = *np - '0';
-            ptok->semitone = (semi + 12) % 12;
+            int octave = *np - '0';
+            /* Accidentals that cross the octave boundary (B# -> next C, Cb ->
+             * previous B) adjust the octave rather than wrapping the semitone
+             * back into 0..11. */
+            if (semi >= 12) { semi -= 12; octave++; }
+            else if (semi < 0) { semi += 12; octave--; }
+            ptok->octave = octave;
+            ptok->semitone = semi;
         } else {
             /* A-G prefix but no octave digit -> named instrument hit (e.g. "closed_hat"). */
             ptok->kind = BAX_TOKEN_INLINE_INST;
