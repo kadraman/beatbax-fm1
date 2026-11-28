@@ -21,17 +21,11 @@ import math
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # The BeatBax CLI to compare against. Resolution order:
-#   1. $BEATBAX (explicit, e.g. "node /path/to/beatbax.main/bin/beatbax").
-#   2. A sibling beatbax.main source checkout (spec-112 parity branch), run via node.
-#   3. `beatbax` on PATH.
-# This keeps `make test` reproducible on both Windows and WSL: WSL's `beatbax` may be
-# the old 0.6.1 npm global, so prefer the source checkout when present.
-_PARITY_BIN = os.path.abspath(os.path.join(REPO_ROOT, "..", "beatbax.main", "bin", "beatbax"))
+#   1. $BEATBAX (explicit, e.g. "node /path/to/beatbax/bin/beatbax").
+#   2. `beatbax` on PATH (latest npm global).
 _env = os.environ.get("BEATBAX")
 if _env:
     BEATBAX = shlex.split(_env)
-elif os.path.exists(_PARITY_BIN):
-    BEATBAX = ["node", _PARITY_BIN]
 else:
     BEATBAX = ["beatbax"]
 DEFAULT_FIXTURES = [
