@@ -109,6 +109,14 @@ int gb_stream_validate(const gb_song_blob_t *blob) {
         return 5;
     }
 
+    /* Validate event instrument indices before the overlap scan dereferences
+     * insts[ev->inst] (in event_tail); a bad index would read out of bounds. */
+    for (uint32_t i = 0; i < blob->event_count; i++) {
+        if (blob->events[i].inst >= blob->inst_count) {
+            return 7;
+        }
+    }
+
     /* Reject schedules whose overlapping notes (including release tails) would
      * exhaust the active-note pool: the scheduler would silently drop the extra
      * notes and diverge from the offline renderer. */

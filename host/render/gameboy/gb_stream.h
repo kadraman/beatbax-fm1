@@ -127,7 +127,8 @@ typedef struct {
 /* Validate a blob (magic/version/counts, and that no schedule point exceeds the
  * active-note pool). Returns 0 on success, else an error code:
  *   1 null blob, 2 bad magic, 3 bad version, 4 no instruments, 5 no events,
- *   6 schedule exceeds the active-note pool. */
+ *   6 schedule exceeds the active-note pool, 7 event instrument index out of
+ *   range. */
 int gb_stream_validate(const gb_song_blob_t *blob);
 
 /* Bind a stream to a blob and reset transport (stopped, at the start). */

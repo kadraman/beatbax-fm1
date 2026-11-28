@@ -181,6 +181,38 @@ static void test_pool_exhaustion(void) {
     printf("  PASS: overlapping schedule rejected (pool exhausted)\n");
 }
 
+static void test_invalid_inst_index(void) {
+    printf("Testing invalid instrument index rejection...\n");
+
+    /* An event referencing inst == inst_count must be rejected before the
+     * overlap scan reads insts[ev->inst] out of bounds. */
+    static gb_song_inst_t inst;
+    static gb_song_event_t ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.start = 0;
+    ev.len = 100;
+    ev.midi = 60;
+    ev.inst = 1; /* out of range: only inst_count == 1 */
+    ev.fx = GB_BLOB_FX_NONE;
+    ev.channel = 0;
+    ev.vol_override = -1;
+
+    gb_song_blob_t blob;
+    memset(&blob, 0, sizeof(blob));
+    blob.magic = GB_BLOB_MAGIC;
+    blob.version = GB_BLOB_VERSION;
+    blob.sample_rate = RATE;
+    blob.total_frames = 1000;
+    blob.name = "bad";
+    blob.insts = &inst;
+    blob.inst_count = 1;
+    blob.events = &ev;
+    blob.event_count = 1;
+
+    assert(gb_stream_validate(&blob) == 7);
+    printf("  PASS: invalid instrument index rejected\n");
+}
+
 int main(void) {
     printf("Running BeatBax FM-1 Stream Render Tests (feature 004)...\n\n");
 
@@ -194,6 +226,7 @@ int main(void) {
     test_bit_identity_and_blocksize(&song);
     test_stop_reset_replay(&song);
     test_pool_exhaustion();
+    test_invalid_inst_index();
 
     bax_song_free(&song);
     printf("\nAll stream render tests passed successfully!\n");
