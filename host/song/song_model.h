@@ -131,12 +131,15 @@ typedef enum {
 typedef struct {
     char name[BAX_MAX_NAME_LEN];
     bax_effect_type_t type;
+    bool is_inline;      /* auto-registered inline `<vib:…>` expression (not a declaration) */
     char raw_expr[BAX_MAX_STR_LEN];
     union {
         struct {
-            int speed;
-            int depth;
-            char waveform[16];
+            int speed;          /* first param = depth (0–15) */
+            int depth;          /* second param = rate (Hz) */
+            char waveform[16];  /* third param (sine/square/saw/triangle) */
+            int duration_rows;  /* fourth param (0 = unset) */
+            int delay_rows;     /* fifth param (0 = immediate) */
         } vib;
         struct {
             int semi1;
@@ -192,6 +195,7 @@ typedef struct {
     char inst_override[BAX_MAX_NAME_LEN];
     int oct_offset;                   /* 0 if none */
     int vol_override;                 /* -1 if none */
+    char effect[BAX_MAX_NAME_LEN];    /* `pattern:effect` fallback named effect ("" if none) */
     char raw[BAX_MAX_STR_LEN];        /* full item text (modifiers preserved verbatim) */
 } bax_seq_item_t;
 

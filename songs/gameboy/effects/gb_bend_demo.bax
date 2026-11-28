@@ -1,0 +1,18 @@
+## Game Boy Pitch Bend (bend) effect demo — clean curves (feature 008 parity)
+## Covers exp / log / linear / sine curves and fractional semitones.
+
+chip gameboy
+bpm 128
+
+inst lead type=pulse1 duty=50 env=12,flat
+
+effect riser   = bend:+12,exp,0,1
+effect dive    = bend:-12,log,0,1
+effect tone    = bend:+2,linear,0.5
+effect subtle  = bend:+0.5,sine,0.5
+
+pat bends = C4<riser>:8 D4<dive>:8 E4<tone>:8 F4<subtle>:8
+
+seq main = bends
+channel 1 => inst lead seq main
+play

@@ -2,7 +2,7 @@
 title: "Game Boy renderer on the host"
 id: 3
 slug: "gameboy-renderer"
-status: in-progress
+status: complete
 authors: ["kadraman"]
 created: 2026-11-11
 updated: 2026-11-20

@@ -51,6 +51,13 @@ bool gb_song_render_mono_mask(const bax_song_t *song, uint32_t sample_rate,
                               gb_sample_t **out_mono, size_t *out_len,
                               char *errbuf, size_t errbuf_len);
 
+/*
+ * Host-only: compute the 0.95 peak-limit scale (Q15) the offline renderer would
+ * apply to `song` at `sample_rate`. Returns 0 when no scaling is needed
+ * (peak <= the ceiling). Used by the compiled-song embedder to bake the scale.
+ */
+int32_t gb_song_peak_scale_q15(const bax_song_t *song, uint32_t sample_rate);
+
 #ifdef __cplusplus
 }
 #endif

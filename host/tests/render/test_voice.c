@@ -52,16 +52,23 @@ static void test_envelope(void) {
     printf("Testing GB volume envelope...\n");
 
     /* period 0 (or flat) -> constant initial/15. */
-    assert(gb_envelope_q15(8, GB_ENV_FLAT, 3, 0, 44100) == 8 * 32767 / 15);
-    assert(gb_envelope_q15(8, GB_ENV_DOWN, 0, 100000, 44100) == 8 * 32767 / 15);
+    assert(gb_envelope_q15(8, GB_ENV_FLAT, 3, 0, 44100, 44100) == 8 * 32767 / 15);
+    assert(gb_envelope_q15(8, GB_ENV_DOWN, 0, 100000, 44100, 44100) == 8 * 32767 / 15);
 
     /* Down: initial 12, period 1 -> 12/15 at t=0, 0 after >= 12 steps (12/64 s). */
-    assert(gb_envelope_q15(12, GB_ENV_DOWN, 1, 0, 44100) == 12 * 32767 / 15);
-    assert(gb_envelope_q15(12, GB_ENV_DOWN, 1, 44100, 44100) == 0);
+    assert(gb_envelope_q15(12, GB_ENV_DOWN, 1, 0, 44100, 44100) == 12 * 32767 / 15);
+    assert(gb_envelope_q15(12, GB_ENV_DOWN, 1, 44100, 44100, 44100) == 0);
+
+    /* Linear interpolation between steps (no zipper): half a step is strictly
+     * between the neighbouring step levels, not the discrete level. */
+    int16_t v0 = gb_envelope_q15(12, GB_ENV_DOWN, 1, 0, 44100, 44100);
+    int16_t vh = gb_envelope_q15(12, GB_ENV_DOWN, 1, 344, 44100, 44100);  /* ~0.5 step */
+    int16_t v1 = gb_envelope_q15(12, GB_ENV_DOWN, 1, 689, 44100, 44100);  /* ~1 step */
+    assert(v0 > vh && vh > v1);
 
     /* Up: initial 4, period 1 -> saturates to 15/15 after 11+ steps. */
-    assert(gb_envelope_q15(4, GB_ENV_UP, 1, 0, 44100) == 4 * 32767 / 15);
-    assert(gb_envelope_q15(4, GB_ENV_UP, 1, 44100, 44100) == 32767);
+    assert(gb_envelope_q15(4, GB_ENV_UP, 1, 0, 44100, 44100) == 4 * 32767 / 15);
+    assert(gb_envelope_q15(4, GB_ENV_UP, 1, 44100, 44100, 44100) == 32767);
 
     printf("  PASS: volume envelope\n");
 }
@@ -91,10 +98,10 @@ static void test_wave(void) {
 
     uint8_t ramp[32];
     for (int i = 0; i < 32; i++) ramp[i] = (uint8_t)(i % 16); /* 0..15 twice, sum 240 */
-    /* phase 0 -> index 0 (value 0): (32*0 - 240) * 32767 / 480 = -16383 */
-    assert(gb_wave_sample_q15(ramp, 240, 1, 0) == -16383);
-    /* phase 15/32 -> index 15 (value 15): +16383 */
-    assert(gb_wave_sample_q15(ramp, 240, 1, 15u << 27) == 16383);
+    /* phase 0 -> index 0 (value 0): (32*0 - 240) * 32767 * 54 / 48000 = -8847 */
+    assert(gb_wave_sample_q15(ramp, 240, 1, 0) == -8847);
+    /* phase 15/32 -> index 15 (value 15): +8847 */
+    assert(gb_wave_sample_q15(ramp, 240, 1, 15u << 27) == 8847);
 
     assert(gb_wave_volume_div(100) == 1);
     assert(gb_wave_volume_div(50) == 2);

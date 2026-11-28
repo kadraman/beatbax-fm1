@@ -71,7 +71,7 @@ effect slide     = port:96           # fast UGE-friendly glide between short ste
 effect slowSlide = port:64           # UGE-friendly glide for short bass run notes
 
 effect riser     = bend:+12,exp,0,1  # dramatic one-octave rise — bridge lead-in
-effect faller     = bend:-1212,exp,0,1  # dramatic one-octave fall — bridge lead-in
+effect faller     = bend:-12,exp,0,1  # dramatic one-octave fall — bridge lead-in
 effect dive      = bend:-12,log,0,1  # falling pitch drop at phrase end
 
 effect wobble    = vib:3,5,sine,3    # gentle pitch wobble on bridge's sustained notes

@@ -40,5 +40,5 @@
 
 ## Polish
 
-- [ ] T900 Link `docs/renderer.md` from root README development section
-- [ ] T901 Move this folder to `specs/complete/003-gameboy-renderer/` and update `specs/STATUS.md` when shipped
+- [x] T900 Link `docs/renderer.md` from root README development section
+- [x] T901 Move this folder to `specs/complete/003-gameboy-renderer/` and update `specs/STATUS.md` when shipped

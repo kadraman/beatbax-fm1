@@ -10,10 +10,10 @@ Installing custom firmware (BeatBax FM-1, Felucca, or others) can leave the devi
 
 ## Install with M-Flasher
 
-BeatBax FM-1 bring-up is uploaded with **M-Flasher**, alongside a bootloader (m-bootloader) that provides the REC-hold recovery below.
+BeatBax FM-1 firmware is uploaded with **M-Flasher**, alongside a bootloader (m-bootloader) that provides the REC-hold recovery below.
 
 1. Build and package the firmware — see [`firmware/README.md`](../../firmware/README.md).
-2. Upload `build/beatbax-fm1-001.fwsc` with M-Flasher (package identity `FM-1_1001`).
+2. Upload `build/beatbax-fm1-004.fwsc` with M-Flasher (package identity `FM-1_1001`).
 3. On a first install from stock, let M-Flasher install the bootloader too.
 
 ## REC-hold recovery (primary)
@@ -23,7 +23,7 @@ The bootloader gives a recovery mode that needs no USB_KEY dongle:
 1. Hold **REC**.
 2. Power-cycle (off, then on) while still holding **REC**.
 3. The bootloader appears on USB; re-flash with M-Flasher:
-   - BeatBax FM-1 bring-up: `build/beatbax-fm1-001.fwsc`
+   - BeatBax FM-1: `build/beatbax-fm1-004.fwsc`
    - Or reinstall **stock** / another known-good package.
 
 This replaces the older USB_KEY (Flipper / lilfm1buddy / Transporter) route on this unit.

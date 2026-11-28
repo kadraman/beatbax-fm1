@@ -118,7 +118,7 @@ static void write_instrument(write_ctx_t *ctx, const bax_instrument_t *inst) {
                      inst->sweep.time, dir, inst->sweep.shift);
         }
     } else if (inst->type == BAX_VOICE_WAVE) {
-        if (inst->wave_volume > 0) {
+        if (inst->wave_volume != 100) { /* 100 is the default (omitted) */
             w_printf(ctx, " volume=%d", inst->wave_volume);
         }
         if (inst->wave.count > 0) {
@@ -395,10 +395,17 @@ static bool write_internal(const bax_song_t *song, write_ctx_t *ctx) {
 
     /* Effects */
     if (song->effect_count > 0) {
+        bool wrote_any = false;
         for (size_t i = 0; i < song->effect_count; i++) {
+            if (song->effects[i].is_inline) {
+                continue; /* inline `<vib:…>` expression — written at the note, not declared */
+            }
             write_effect(ctx, &song->effects[i]);
+            wrote_any = true;
         }
-        w_printf(ctx, "\n");
+        if (wrote_any) {
+            w_printf(ctx, "\n");
+        }
     }
 
     /* Subpatterns */

@@ -50,7 +50,7 @@ void gb_render_pulse(gb_sample_t *out, uint32_t duration,
     for (uint32_t i = 0; i < duration; i++) {
         *phase += inc;
         int16_t bip = gb_pulse_bipolar(*phase, duty_thr);
-        int16_t env = gb_envelope_q15(env_initial, env_dir, env_period, i, sample_rate);
+        int16_t env = gb_envelope_q15(env_initial, env_dir, env_period, i, duration, sample_rate);
         int16_t amp = (int16_t)(env >> 2); /* * PULSE_OUTPUT_GAIN (0.25) */
         out[i] = (bip > 0) ? amp : (gb_sample_t)(-amp);
     }
@@ -88,7 +88,7 @@ void gb_render_noise(gb_sample_t *out, uint32_t duration,
             lfsr = gb_noise_lfsr_step(lfsr, width7);
         }
         int16_t bip = gb_noise_sample(lfsr);
-        int16_t env = gb_envelope_q15(env_initial, env_dir, env_period, i, sample_rate);
+        int16_t env = gb_envelope_q15(env_initial, env_dir, env_period, i, duration, sample_rate);
         int16_t amp = (int16_t)(env >> 2); /* * NOISE_OUTPUT_GAIN (0.25) */
         out[i] = (bip > 0) ? amp : (gb_sample_t)(-amp);
     }

@@ -47,6 +47,7 @@ beatbax-fm1/
 ```
 
 Song model reference: [`docs/song-model.md`](docs/song-model.md).  
+Renderer reference: [`docs/renderer.md`](docs/renderer.md).  
 Build and flash: [`firmware/README.md`](firmware/README.md). Recovery: [`docs/hardware/recovery.md`](docs/hardware/recovery.md).
 
 ## Spec-driven development
@@ -66,8 +67,8 @@ Start with [specs/README.md](specs/README.md) and [specs/constitution.md](specs/
 |----|---------|-------|--------|
 | 001 | Platform bring-up (Felucca, screen, controls, tone, USB) | [#1](https://github.com/kadraman/beatbax-fm1/issues/1) | complete |
 | 002 | `.bax` round-trip on the host | [#2](https://github.com/kadraman/beatbax-fm1/issues/2) | complete |
-| 003 | Game Boy renderer on the host | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | draft |
-| 004 | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | draft |
+| 003 | Game Boy renderer on the host | [#3](https://github.com/kadraman/beatbax-fm1/issues/3) | complete |
+| 004 | Device player | [#4](https://github.com/kadraman/beatbax-fm1/issues/4) | complete |
 | 005 | Graphical composer screens | [#5](https://github.com/kadraman/beatbax-fm1/issues/5) | draft |
 | 006 | Store and USB transfer | [#6](https://github.com/kadraman/beatbax-fm1/issues/6) | draft |
 | 007 | Live play and record | [#7](https://github.com/kadraman/beatbax-fm1/issues/7) | draft |

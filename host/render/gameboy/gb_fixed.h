@@ -46,6 +46,16 @@ typedef int16_t gb_q15_t;
 /* One full phase cycle (0x1.0000.0000), expressed for the phase accumulator. */
 #define GB_PHASE_ONE_FRAC_BITS 32u
 
+/*
+ * Firmware SRAM placement hook. On the host this is empty; the firmware build
+ * defines it to `__attribute__((section(".ram_text"), noinline, used))` so the
+ * whole renderer call graph lands in SRAM (the pi32 `call` range cannot span
+ * the SRAM<->XIP gap, so hot functions must be co-resident in .ram_text).
+ */
+#ifndef GB_RAMFN
+#define GB_RAMFN
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

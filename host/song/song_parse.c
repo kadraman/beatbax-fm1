@@ -543,8 +543,14 @@ static bool parse_pattern_token(const char *tok, bax_pat_token_t *ptok) {
 
         if (isdigit((unsigned char)*np)) {
             ptok->kind = BAX_TOKEN_NOTE;
-            ptok->octave = *np - '0';
-            ptok->semitone = (semi + 12) % 12;
+            int octave = *np - '0';
+            /* Accidentals that cross the octave boundary (B# -> next C, Cb ->
+             * previous B) adjust the octave rather than wrapping the semitone
+             * back into 0..11. */
+            if (semi >= 12) { semi -= 12; octave++; }
+            else if (semi < 0) { semi += 12; octave--; }
+            ptok->octave = octave;
+            ptok->semitone = semi;
         } else {
             /* A-G prefix but no octave digit -> named instrument hit (e.g. "closed_hat"). */
             ptok->kind = BAX_TOKEN_INLINE_INST;
@@ -594,11 +600,106 @@ static bool parse_seq_item(const char *tok, bax_seq_item_t *item) {
             while (*p && *p != ')') p++;
             if (*p == ')') p++;
         } else {
-            /* Unknown :modifier — preserved verbatim in item->raw. */
-            while (*p && *p != ':') p++;
+            /* Named effect: `pattern:effect` applies the named effect as a per-note
+             * fallback. Capture the identifier (before any `:…` or `*N`). */
+            size_t ei = 0;
+            while (*p && *p != ':' && *p != '*' && ei + 1 < sizeof(item->effect)) {
+                item->effect[ei++] = *p;
+                p++;
+            }
+            item->effect[ei] = '\0';
+            while (*p && *p != ':') p++; /* skip any trailing repetition `*N` */
         }
     }
     return true;
+}
+
+/* Parse an effect expression ("vib:…", "arp:…", "port:…", "bend:…", or other)
+ * into `eff` (type + params). Returns the resolved type. */
+static bax_effect_type_t parse_effect_expr(const char *expr, bax_effect_t *eff) {
+    bax_effect_type_t etype = BAX_EFFECT_OTHER;
+    if (strncmp(expr, "vib:", 4) == 0) etype = BAX_EFFECT_VIBRATO;
+    else if (strncmp(expr, "arp:", 4) == 0) etype = BAX_EFFECT_ARPEGGIO;
+    else if (strncmp(expr, "port:", 5) == 0) etype = BAX_EFFECT_PORTAMENTO;
+    else if (strncmp(expr, "bend:", 5) == 0) etype = BAX_EFFECT_BEND;
+
+    eff->type = etype;
+    if (etype == BAX_EFFECT_VIBRATO) {
+        const char *p = expr + 4;
+        eff->params.vib.speed = atoi(p);
+        const char *c1 = strchr(p, ',');
+        if (c1) {
+            eff->params.vib.depth = atoi(c1 + 1);
+            const char *c2 = strchr(c1 + 1, ',');
+            if (c2) {
+                /* waveform is the token between the 2nd and 3rd comma. */
+                const char *c3 = strchr(c2 + 1, ',');
+                size_t wlen = c3 ? (size_t)(c3 - (c2 + 1)) : strlen(c2 + 1);
+                if (wlen >= sizeof(eff->params.vib.waveform)) wlen = sizeof(eff->params.vib.waveform) - 1;
+                memcpy(eff->params.vib.waveform, c2 + 1, wlen);
+                eff->params.vib.waveform[wlen] = '\0';
+                if (c3) {
+                    eff->params.vib.duration_rows = atoi(c3 + 1);
+                    const char *c4 = strchr(c3 + 1, ',');
+                    if (c4) {
+                        eff->params.vib.delay_rows = atoi(c4 + 1);
+                    }
+                }
+            }
+        }
+    } else if (etype == BAX_EFFECT_ARPEGGIO) {
+        const char *p = expr + 4;
+        eff->params.arp.semi1 = atoi(p);
+        const char *c1 = strchr(p, ',');
+        if (c1) {
+            eff->params.arp.semi2 = atoi(c1 + 1);
+            const char *c2 = strchr(c1 + 1, ',');
+            if (c2) {
+                eff->params.arp.semi3 = atoi(c2 + 1);
+            }
+        }
+    } else if (etype == BAX_EFFECT_PORTAMENTO) {
+        eff->params.port.speed = atoi(expr + 5);
+    }
+    return etype;
+}
+
+/* True when a `<…>` effect reference is a raw inline expression (not a named
+ * effect). Named effects are plain identifiers; inline expressions carry a
+ * `vib:`/`arp:`/`port:`/`bend:` prefix. */
+static bool is_inline_effect_expr(const char *name) {
+    return strncmp(name, "vib:", 4) == 0 || strncmp(name, "arp:", 4) == 0 ||
+           strncmp(name, "port:", 5) == 0 || strncmp(name, "bend:", 5) == 0;
+}
+
+/* Find-or-register an inline effect expression (dedup by name). */
+static bax_effect_t *register_inline_effect(bax_song_t *song, const char *expr) {
+    bax_effect_t *existing = (bax_effect_t *)bax_song_find_effect(song, expr);
+    if (existing) {
+        return existing;
+    }
+    bax_effect_t *eff = bax_song_add_effect(song, expr, BAX_EFFECT_OTHER);
+    if (!eff) {
+        return NULL;
+    }
+    strncpy(eff->raw_expr, expr, sizeof(eff->raw_expr) - 1);
+    eff->is_inline = true;
+    parse_effect_expr(expr, eff);
+    return eff;
+}
+
+/* Auto-register inline `<vib:…>` / `<bend:…>` / `<arp:…>` / `<port:…>` note
+ * effects so `bax_song_find_effect` resolves them exactly like named effects. */
+static void register_inline_effects(bax_song_t *song) {
+    for (size_t pi = 0; pi < song->pattern_count; pi++) {
+        const bax_pattern_t *pat = &song->patterns[pi];
+        for (size_t ti = 0; ti < pat->token_count; ti++) {
+            const char *ename = pat->tokens[ti].effect_name;
+            if (ename[0] != '\0' && is_inline_effect_expr(ename)) {
+                register_inline_effect(song, ename);
+            }
+        }
+    }
 }
 
 static bool is_top_level_directive(const char *word) {
@@ -805,39 +906,9 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
             }
             eff_expr[ei] = '\0';
 
-            bax_effect_type_t etype = BAX_EFFECT_OTHER;
-            if (strncmp(eff_expr, "vib:", 4) == 0) etype = BAX_EFFECT_VIBRATO;
-            else if (strncmp(eff_expr, "arp:", 4) == 0) etype = BAX_EFFECT_ARPEGGIO;
-            else if (strncmp(eff_expr, "port:", 5) == 0) etype = BAX_EFFECT_PORTAMENTO;
-            else if (strncmp(eff_expr, "bend:", 5) == 0) etype = BAX_EFFECT_BEND;
-
-            bax_effect_t *eff = bax_song_add_effect(out_song, eff_name, etype);
+            bax_effect_t *eff = bax_song_add_effect(out_song, eff_name, BAX_EFFECT_OTHER);
             strncpy(eff->raw_expr, eff_expr, sizeof(eff->raw_expr) - 1);
-            if (etype == BAX_EFFECT_VIBRATO) {
-                const char *p = eff_expr + 4;
-                eff->params.vib.speed = atoi(p);
-                const char *c1 = strchr(p, ',');
-                if (c1) {
-                    eff->params.vib.depth = atoi(c1 + 1);
-                    const char *c2 = strchr(c1 + 1, ',');
-                    if (c2) {
-                        strncpy(eff->params.vib.waveform, c2 + 1, sizeof(eff->params.vib.waveform) - 1);
-                    }
-                }
-            } else if (etype == BAX_EFFECT_ARPEGGIO) {
-                const char *p = eff_expr + 4;
-                eff->params.arp.semi1 = atoi(p);
-                const char *c1 = strchr(p, ',');
-                if (c1) {
-                    eff->params.arp.semi2 = atoi(c1 + 1);
-                    const char *c2 = strchr(c1 + 1, ',');
-                    if (c2) {
-                        eff->params.arp.semi3 = atoi(c2 + 1);
-                    }
-                }
-            } else if (etype == BAX_EFFECT_PORTAMENTO) {
-                eff->params.port.speed = atoi(eff_expr + 5);
-            }
+            parse_effect_expr(eff_expr, eff);
         } else if (strcmp(keyword, "subpat") == 0) {
             char sub_name[BAX_MAX_NAME_LEN];
             read_ident(&ctx, sub_name, sizeof(sub_name));
@@ -1292,6 +1363,8 @@ bool bax_song_parse(const char *text, size_t len, bax_song_t *out_song, bax_erro
         bax_song_free(out_song);
         return false;
     }
+
+    register_inline_effects(out_song);
 
     return true;
 }
